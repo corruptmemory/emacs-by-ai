@@ -1,0 +1,1254 @@
+;;; init.el --- Main configuration -*- lexical-binding: t; no-byte-compile: t; -*-
+
+;;; Commentary:
+;; Main Emacs configuration, loaded after early-init.el.
+
+;;; Code:
+
+;;;; Startup time display.
+(add-hook 'emacs-startup-hook
+          (lambda ()
+            (message "Emacs loaded in %s with %d garbage collections."
+                     (format "%.2f seconds"
+                             (float-time
+                              (time-subtract after-init-time before-init-time)))
+                     gcs-done)))
+
+;;;; Bootstrap straight.el.
+(defvar bootstrap-version)
+(let ((bootstrap-file
+       (expand-file-name
+        "straight/repos/straight.el/bootstrap.el"
+        (or (bound-and-true-p straight-base-dir)
+            user-emacs-directory)))
+      (bootstrap-version 7))
+  (unless (file-exists-p bootstrap-file)
+    (with-current-buffer
+        (url-retrieve-synchronously
+         "https://raw.githubusercontent.com/radian-software/straight.el/develop/install.el"
+         'silent 'inhibit-cookies)
+      (goto-char (point-max))
+      (eval-print-last-sexp)))
+  (load bootstrap-file nil 'nomessage))
+
+;;;; use-package integration.
+;; Force core libraries to use Emacs built-ins, avoiding straight duplicates.
+(straight-use-package '(project :type built-in))
+(straight-use-package '(xref :type built-in))
+(straight-use-package 'use-package)
+(setq straight-use-package-by-default t)
+
+;;;; Custom file.
+(setq custom-file (expand-file-name "custom.el" user-emacs-directory))
+(when (file-exists-p custom-file)
+  (load custom-file nil 'nomessage))
+
+;;;; Local machine-specific overrides (not tracked).
+(defvar my/mouse-profile 'wheel
+  "Scrolling profile for this machine. Expected values: `wheel' or `trackpad'.")
+
+(let ((local-settings-file (expand-file-name "local-settings.el" user-emacs-directory)))
+  (when (file-exists-p local-settings-file)
+    (load local-settings-file nil 'nomessage)))
+
+;;;; Keep backup, auto-save, and lock files out of working directories.
+(let ((saves-dir (expand-file-name "saves/" user-emacs-directory)))
+  (make-directory saves-dir t)
+  (setq backup-directory-alist `(("." . ,saves-dir))
+        auto-save-file-name-transforms `((".*" ,saves-dir t))
+        lock-file-directory saves-dir))
+
+;;;; Auto-revert buffers when files change on disk.
+(global-auto-revert-mode 1)
+
+;;;; Replace active region when typing.
+(delete-selection-mode 1)
+
+;;;; Tab display/indent defaults.
+;; Keep literal tab characters visually narrow unless a mode overrides it.
+(setq-default tab-width 4)
+;; TAB indents normally, but triggers completion when indentation is not applicable.
+(setq tab-always-indent 'complete)
+
+;;;; Highlight current line.
+(global-hl-line-mode 1)
+
+;;;; Recent files.
+(use-package recentf
+  :straight nil
+  :custom
+  (recentf-save-file (expand-file-name "recentf" user-emacs-directory))
+  (recentf-max-saved-items 20)
+  (recentf-exclude '("\\.zip\\'" "\\.gz\\'" "\\.tar\\'" "\\.tar\\.gz\\'"
+                     "\\.tar\\.bz2\\'" "\\.tar\\.xz\\'" "\\.tgz\\'"
+                     "\\.7z\\'" "\\.rar\\'" "\\.jar\\'"))
+  :init
+  (add-hook 'after-init-hook #'recentf-mode))
+
+;;;; Save point position in files across sessions.
+(use-package saveplace
+  :straight nil
+  :custom
+  (save-place-file (expand-file-name "saveplace" user-emacs-directory))
+  :init
+  (save-place-mode 1))
+
+;;;; PATH configuration.
+(dolist (dir '("~/.cargo/bin"
+               "~/.local/bin"
+               "~/go/bin"
+               "~/projects/Odin"
+               "~/projects/ols"))
+  (let ((expanded (expand-file-name dir)))
+    (unless (member expanded exec-path)
+      (push expanded exec-path))
+    (unless (string-match-p (regexp-quote expanded) (getenv "PATH"))
+      (setenv "PATH" (concat expanded ":" (getenv "PATH"))))))
+
+;;;; Theme load path.
+(add-to-list 'custom-theme-load-path
+             (expand-file-name "themes/" user-emacs-directory))
+
+;;;; Theme.
+(load-theme 'dracula-pro-blade t)
+
+;;;; Theme-derived fringe contrast.
+(require 'color)
+
+(defvar my/fringe-contrast-threshold 0.08
+  "HSL lightness threshold for deciding whether a background is light-ish.")
+
+(defvar my/fringe-darken-amount 24
+  "Percent used to darken fringe background on light-ish themes.")
+
+(defvar my/fringe-lighten-amount 12
+  "Percent used to lighten fringe background on dark-ish themes.")
+
+(defun my/apply-complementary-fringe-background (&rest _)
+  "Set fringe background to a contrasting shade of the default background."
+  (let* ((default-bg (face-background 'default nil 'default))
+         (rgb (and (stringp default-bg) (color-name-to-rgb default-bg))))
+    (when rgb
+      (let* ((hsl (apply #'color-rgb-to-hsl rgb))
+             (lightness (nth 2 hsl))
+             (light-ish (>= lightness my/fringe-contrast-threshold))
+             (fringe-bg (if light-ish
+                            (color-darken-name default-bg my/fringe-darken-amount)
+                          (color-lighten-name default-bg my/fringe-lighten-amount))))
+        (set-face-attribute 'fringe nil :background fringe-bg)))))
+
+(advice-add 'load-theme :after #'my/apply-complementary-fringe-background)
+(my/apply-complementary-fringe-background)
+
+;;;; Fonts.
+;;(set-face-attribute 'default nil :family "TX-02" :height 130)
+(set-face-attribute 'default nil :font "TX-02-14")
+(set-face-attribute 'variable-pitch nil :family "Fira Sans" :height 130)
+(set-fontset-font t 'emoji (font-spec :family "JoyPixels") nil 'prepend)
+
+;;;; Smooth scrolling (built-in pixel precision + horizontal wheel support).
+(defun my/apply-scrolling-profile ()
+  "Apply scrolling settings from `my/mouse-profile'."
+  (pcase my/mouse-profile
+    ('trackpad
+     (setq pixel-scroll-precision-use-momentum t
+           pixel-scroll-precision-interpolate-page t
+           pixel-scroll-precision-interpolate-mice t
+           mouse-wheel-progressive-speed nil
+           mouse-wheel-tilt-scroll t
+           mouse-wheel-scroll-amount '(1 ((shift) . hscroll))
+           mouse-wheel-scroll-amount-horizontal 2))
+    (_
+     ;; Wheel profile favors immediate response over interpolation.
+     (setq pixel-scroll-precision-use-momentum nil
+           pixel-scroll-precision-interpolate-page nil
+           pixel-scroll-precision-interpolate-mice nil
+           mouse-wheel-progressive-speed nil
+           mouse-wheel-tilt-scroll t
+           mouse-wheel-scroll-amount '(1 ((shift) . hscroll))
+           mouse-wheel-scroll-amount-horizontal 2)))
+  (pixel-scroll-precision-mode 1))
+
+(my/apply-scrolling-profile)
+
+;;;; which-key.
+(use-package which-key
+  :config
+  (which-key-mode))
+
+;;;; windmove — directional window navigation.
+(global-set-key (kbd "M-s-<left>") #'windmove-left)
+(global-set-key (kbd "M-s-<right>") #'windmove-right)
+(global-set-key (kbd "M-s-<up>") #'windmove-up)
+(global-set-key (kbd "M-s-<down>") #'windmove-down)
+
+;;;; Word motion/deletion tuned for editor-like chunk behavior.
+(defun cm/relevant-match-syntax (in)
+  "Return syntax spec string for IN used by chunk movement/deletion."
+  (if (or (eq in ?\s) (eq in ?>))
+      " >"
+    (char-to-string in)))
+
+(defun cm/move-right ()
+  "Move right by syntax chunk."
+  (interactive "^")
+  (unless (eobp)
+    (let ((syntax (cm/relevant-match-syntax (char-syntax (char-after)))))
+      (skip-syntax-forward syntax))))
+
+(defun cm/move-left ()
+  "Move left by syntax chunk."
+  (interactive "^")
+  (unless (bobp)
+    (let ((syntax (cm/relevant-match-syntax (char-syntax (char-before)))))
+      (skip-syntax-backward syntax))))
+
+(defun cm/backward-delete-word ()
+  "Delete backward by syntax chunk."
+  (interactive)
+  (unless (bobp)
+    (let ((end (point))
+          (syntax (cm/relevant-match-syntax (char-syntax (char-before)))))
+      (skip-syntax-backward syntax)
+      (delete-region (point) end))))
+
+(defun cm/delete-word ()
+  "Delete forward by syntax chunk."
+  (interactive)
+  (unless (eobp)
+    (let ((start (point))
+          (syntax (cm/relevant-match-syntax (char-syntax (char-after)))))
+      (skip-syntax-forward syntax)
+      (delete-region start (point)))))
+
+(defun cm/move-line (n)
+  "Move current line by N lines, preserving column when possible."
+  (let ((line (line-number-at-pos))
+        (last-line (line-number-at-pos (point-max)))
+        (col (current-column)))
+    (cond
+     ((and (< n 0) (= line 1))
+      (user-error "Already at top of buffer"))
+     ((and (> n 0) (>= line last-line))
+      (user-error "Already at bottom of buffer"))
+     (t
+      (beginning-of-line)
+      (let* ((start (point))
+             (_ (forward-line 1))
+             (text (delete-and-extract-region start (point))))
+        (forward-line n)
+        (let ((insert-pos (point)))
+          (insert text)
+          (goto-char insert-pos)
+          (move-to-column col t)))))))
+
+(defun cm/move-line-up ()
+  "Move current line up by one line."
+  (interactive)
+  (cm/move-line -1))
+
+(defun cm/move-line-down ()
+  "Move current line down by one line."
+  (interactive)
+  (cm/move-line 1))
+
+(global-set-key (kbd "C-<right>") #'cm/move-right)
+(global-set-key (kbd "C-<left>") #'cm/move-left)
+(global-set-key (kbd "C-<backspace>") #'cm/backward-delete-word)
+(global-set-key (kbd "C-<delete>") #'cm/delete-word)
+(global-set-key (kbd "M-<up>") #'cm/move-line-up)
+(global-set-key (kbd "M-<down>") #'cm/move-line-down)
+(global-set-key (kbd "C-M-'") #'forward-sexp)
+(global-set-key (kbd "C-M-;") #'backward-sexp)
+(global-set-key (kbd "M-d") #'duplicate-dwim)
+
+;;;; Vertico — vertical minibuffer completion UI.
+(use-package vertico
+  :init
+  (vertico-mode)
+  :custom
+  (vertico-cycle t))
+
+;;;; vertico-directory — improved minibuffer directory editing.
+(use-package vertico-directory
+  :straight nil
+  :after vertico
+  :bind (:map vertico-map
+              ("RET"   . vertico-directory-enter)
+              ("DEL"   . vertico-directory-delete-char)
+              ("M-DEL" . vertico-directory-delete-word))
+  :hook (rfn-eshadow-update-overlay . vertico-directory-tidy))
+
+;;;; vertico-repeat — repeat prior minibuffer sessions.
+(use-package vertico-repeat
+  :straight nil
+  :after vertico
+  :init
+  (add-hook 'minibuffer-setup-hook #'vertico-repeat-save)
+  :bind (("M-R" . vertico-repeat)
+         :map vertico-map
+         ("M-r" . vertico-repeat-select)))
+
+;;;; vertico-multiform — command-specific completion UIs.
+(use-package vertico-multiform
+  :straight nil
+  :after vertico
+  :init
+  (vertico-multiform-mode 1))
+
+;;;; Orderless — flexible completion matching.
+(use-package orderless
+  :custom
+  (completion-styles '(orderless basic))
+  (completion-category-overrides '((file (styles partial-completion)))))
+
+;;;; Marginalia — rich annotations in the minibuffer.
+(use-package marginalia
+  :init
+  (marginalia-mode))
+
+;;;; savehist — persist minibuffer/command history across sessions.
+(use-package savehist
+  :straight nil
+  :init
+  (savehist-mode 1))
+
+;;;; prescient — sort by recent/frequent usage.
+(use-package prescient
+  :custom
+  (prescient-history-length 1000)
+  (prescient-save-file (expand-file-name "prescient-save.el" user-emacs-directory))
+  :config
+  (prescient-persist-mode 1))
+
+;;;; vertico-prescient — apply prescient sorting to Vertico/M-x.
+(use-package vertico-prescient
+  :after (vertico prescient)
+  :config
+  (vertico-prescient-mode 1))
+
+;;;; Consult seed helpers.
+(defvar my/consult-region-max-chars 180
+  "Maximum region size used to seed Consult input.")
+
+(defun my/consult-region-seed ()
+  "Return a normalized active-region seed for Consult, or nil.
+Seeding is skipped for multi-line or very large regions."
+  (when (use-region-p)
+    (let* ((raw (buffer-substring-no-properties (region-beginning) (region-end)))
+           (text (string-trim raw)))
+      (when (and (> (length text) 0)
+                 (<= (length text) my/consult-region-max-chars)
+                 (not (string-match-p "\n" text)))
+        text))))
+
+(defun my/consult-line-dwim ()
+  "Run `consult-line' seeded from region when appropriate."
+  (interactive)
+  (consult-line (my/consult-region-seed)))
+
+(defun my/consult-git-grep-dwim ()
+  "Run `consult-git-grep' seeded from region when appropriate."
+  (interactive)
+  (consult-git-grep nil (my/consult-region-seed)))
+
+(defun my/consult-ripgrep-dwim ()
+  "Run `consult-ripgrep' seeded from region when appropriate."
+  (interactive)
+  (consult-ripgrep nil (my/consult-region-seed)))
+
+(defun my/consult-find-dwim ()
+  "Run `consult-find' seeded from region when appropriate."
+  (interactive)
+  (consult-find nil (my/consult-region-seed)))
+
+(defun my/thing-at-point-seed ()
+  "Return symbol-at-point, falling back to word-at-point, or nil."
+  (or (thing-at-point 'symbol t)
+      (thing-at-point 'word t)))
+
+(defun my/project-root-or-default ()
+  "Return current project root when available, else `default-directory'."
+  (if-let* ((project (project-current nil)))
+      (project-root project)
+    default-directory))
+
+(defun my/consult-ripgrep-thing-at-point-literal ()
+  "Run `consult-ripgrep' using thing-at-point as a literal pattern."
+  (interactive)
+  (let ((thing (my/thing-at-point-seed)))
+    (consult-ripgrep nil (and thing (regexp-quote thing)))))
+
+(defun my/consult-ripgrep-thing-at-point-regexp ()
+  "Run `consult-ripgrep' using thing-at-point as a regexp pattern."
+  (interactive)
+  (consult-ripgrep nil (my/thing-at-point-seed)))
+
+(defun my/consult-ripgrep-sql-thing-at-point-literal ()
+  "Search SQL files in the project using thing-at-point as literal input."
+  (interactive)
+  (let* ((thing (my/thing-at-point-seed))
+         (initial (and thing (regexp-quote thing)))
+         (root (my/project-root-or-default))
+         (consult-ripgrep-args
+          (concat consult-ripgrep-args " --glob=*.sql --glob=*.psql")))
+    (consult-ripgrep root initial)))
+
+;;;; Consult — enhanced minibuffer commands.
+(use-package consult
+  :custom
+  (xref-show-xrefs-function #'consult-xref)
+  (xref-show-definitions-function #'consult-xref)
+  :bind
+  (("C-S-s"   . my/consult-line-dwim)
+   ("C-x b"   . consult-buffer)
+   ("C-x p b" . consult-project-buffer)
+   ("C-x C-r" . consult-recent-file)
+   ("C-x 4 b" . consult-buffer-other-window)
+   ("M-g g"   . consult-goto-line)
+   ("M-g M-g" . consult-goto-line)
+   ("M-g e"   . consult-compile-error)
+   ("M-g i"   . consult-imenu)
+   ("C-c h"   . consult-history)
+   ("C-c s"   . my/consult-ripgrep-dwim)
+   ("M-s ."   . my/consult-ripgrep-thing-at-point-literal)
+   ("M-s ,"   . my/consult-ripgrep-thing-at-point-regexp)
+   ("M-s q"   . my/consult-ripgrep-sql-thing-at-point-literal)
+   ("M-s g"   . my/consult-git-grep-dwim)
+   ("M-s r"   . my/consult-ripgrep-dwim)
+   ("M-s f"   . my/consult-find-dwim)
+   ("M-y"     . consult-yank-pop)))
+
+;;;; Embark — contextual actions in minibuffer and buffers.
+(use-package embark
+  :init
+  (setq prefix-help-command #'embark-prefix-help-command)
+  :bind
+  (("C-." . embark-act)
+   ("C-;" . embark-dwim)
+   ("C-h B" . embark-bindings)))
+
+;;;; embark-consult — export/preview integration for Consult candidates.
+(use-package embark-consult
+  :after (embark consult)
+  :hook (embark-collect-mode . consult-preview-at-point-mode))
+
+;;;; Avy — fast jump-to-char/word/line navigation.
+(use-package avy
+  :custom
+  (avy-background t)
+  :bind
+  (("M-j"   . avy-goto-char-timer)
+   ("M-g w" . avy-goto-word-1)
+   ("M-g e" . avy-goto-line)))
+
+;;;; Ace-window — quick window switching and dispatch actions.
+(use-package ace-window
+  :custom
+  (aw-scope 'frame)
+  (aw-dispatch-always nil)
+  (aw-keys '(?a ?s ?d ?f ?j ?k ?l))
+  :bind
+  ([remap other-window] . ace-window)
+  ("M-o" . ace-window))
+
+;;;; Corfu — in-buffer completion popup.
+(use-package corfu
+  :custom
+  (corfu-auto nil)
+  (corfu-cycle t)
+  (corfu-preselect 'prompt)
+  :init
+  (global-corfu-mode))
+
+;;;; corfu-history — rank candidates by prior selections.
+(use-package corfu-history
+  :straight nil
+  :after corfu
+  :init
+  (corfu-history-mode 1))
+
+;;;; corfu-popupinfo — inline documentation popup for Corfu candidates.
+(use-package corfu-popupinfo
+  :straight nil
+  :after corfu
+  :custom
+  (corfu-popupinfo-delay '(0.7 . 0.3))
+  :init
+  (corfu-popupinfo-mode 1))
+
+;;;; tempel — lightweight templates integrated with completion.
+(use-package tempel
+  :bind
+  (("M-+" . tempel-complete)
+   ("M-*" . tempel-insert))
+  :init
+  (defun my/tempel-setup-capf ()
+    "Add Tempel completion to the front of local CAPF list."
+    (setq-local completion-at-point-functions
+                (cons #'tempel-complete completion-at-point-functions)))
+  :hook
+  ((prog-mode . my/tempel-setup-capf)
+   (text-mode . my/tempel-setup-capf)))
+
+(use-package tempel-collection
+  :after tempel)
+
+;;;; kind-icon — icons for completion candidates.
+(use-package kind-icon
+  :after corfu
+  :custom
+  (kind-icon-default-face 'corfu-default)
+  :config
+  (add-to-list 'corfu-margin-formatters #'kind-icon-margin-formatter))
+
+;;;; Multiple-cursors.
+(use-package multiple-cursors
+  :bind
+  (("C->"     . mc/mark-next-like-this)
+   ("C-<"     . mc/mark-previous-like-this)
+   ("C-c C-<" . mc/mark-all-like-this)))
+
+;;;; expand-region — semantic region expansion/shrinking.
+(use-package expand-region
+  :bind
+  (("C-=" . er/expand-region)
+   ("C--" . er/contract-region)))
+
+;;;; string-inflection — cycle between snake/camel/pascal/kebab cases.
+(use-package string-inflection
+  :bind
+  (:map prog-mode-map
+        ("C-c C-u" . string-inflection-all-cycle)))
+
+;;;; Magit — Git interface.
+(use-package magit
+  :bind
+  (("C-x g" . magit-status)))
+
+;;;; Helpful — better help buffers.
+(use-package helpful
+  :bind
+  ([remap describe-function] . helpful-callable)
+  ([remap describe-variable] . helpful-variable)
+  ([remap describe-key]      . helpful-key)
+  ([remap describe-command]  . helpful-command))
+
+;;;; Popper — popup buffer management.
+(defun my/popper-group-by-project-or-directory ()
+  "Group popups by project when available, otherwise by directory."
+  (condition-case nil
+      (popper-group-by-project)
+    (error (popper-group-by-directory))))
+
+(use-package popper
+  :bind
+  (("C-`"   . popper-toggle)
+   ("M-`"   . popper-cycle)
+   ("C-M-`" . popper-toggle-type))
+  :custom
+  (popper-group-function #'my/popper-group-by-project-or-directory)
+  (popper-reference-buffers
+   '("\\*Messages\\*"
+     "\\*Warnings\\*"
+     "\\*Embark Actions\\*"
+     "\\*Embark Collect \\(Live\\|Completions\\)\\*"
+     "\\*Occur\\*"
+     "\\*SQL: \\(?:<[^>]+>\\|[^*]+\\)\\*"
+     "Output\\*$"
+     "\\*Async Shell Command\\*"
+     help-mode
+     helpful-mode
+     compilation-mode))
+  :init
+  (popper-mode)
+  (popper-echo-mode))
+
+;;;; diff-hl — highlight uncommitted changes in the fringe.
+(use-package diff-hl
+  :custom
+  (diff-hl-side 'left)
+  :hook
+  ((magit-pre-refresh  . diff-hl-magit-pre-refresh)
+   (magit-post-refresh . diff-hl-magit-post-refresh)
+   (dired-mode         . diff-hl-dired-mode))
+  :init
+  (global-diff-hl-mode))
+
+;;;; all-the-icons.
+(use-package all-the-icons
+  :if (display-graphic-p))
+
+;;;; all-the-icons-dired.
+(use-package all-the-icons-dired
+  :after all-the-icons
+  :hook (dired-mode . all-the-icons-dired-mode))
+
+;;;; ws-butler — unobtrusive whitespace trimming.
+(use-package ws-butler
+  :hook (prog-mode . ws-butler-mode))
+
+;;;; wgrep — editable grep buffers (useful with Embark-Consult exports).
+(use-package wgrep)
+
+;;;; hl-todo — highlight important note tags.
+(use-package hl-todo
+  :custom
+  (hl-todo-keyword-faces
+   '(("TODO"    . "#ffb86c")
+     ("FIXME"   . "#ff5555")
+     ("BUG"     . "#ff5555")
+     ("NOTE"    . "#8be9fd")
+     ("NB"      . "#8be9fd")
+     ("XXX"     . "#ff79c6")
+     ("FEATURE" . "#50fa7b")))
+  :hook
+  ((prog-mode     . hl-todo-mode)
+   (text-mode     . hl-todo-mode)
+   (markdown-mode . hl-todo-mode)
+   (org-mode      . hl-todo-mode))
+  :config
+  ;; Restrict prog-mode highlighting to comments only (exclude strings).
+  (advice-add 'hl-todo--inside-comment-or-string-p
+              :override
+              (lambda () (nth 4 (syntax-ppss)))))
+
+;;;; Doom modeline.
+(use-package doom-modeline
+  :init
+  (doom-modeline-mode))
+
+;;;; Tree-sitter — automatic grammar installation and mode remapping.
+(defun my/sanitize-auto-mode-alist ()
+  "Remove invalid `auto-mode-alist' entries introduced by third-party code.
+Valid entries must have a regexp string as their car."
+  (setq auto-mode-alist
+        (cl-remove-if-not
+         (lambda (entry)
+           (and (consp entry)
+                (stringp (car entry))))
+         auto-mode-alist)))
+
+(use-package treesit-auto
+  :custom
+  (treesit-auto-install 'prompt)
+  :config
+  (treesit-auto-add-to-auto-mode-alist 'all)
+  (global-treesit-auto-mode)
+  (my/sanitize-auto-mode-alist))
+
+;;;; yasnippet — snippet expansion (used by eglot for LSP snippets).
+(use-package yasnippet
+  :hook (prog-mode . yas-minor-mode))
+
+(use-package yasnippet-snippets
+  :after yasnippet)
+
+;;;; Cape — additional completion-at-point sources.
+(use-package cape
+  :init
+  (add-to-list 'completion-at-point-functions #'cape-file)
+  (add-to-list 'completion-at-point-functions #'cape-dabbrev))
+
+;;;; Eglot — built-in LSP client.
+;;;; -----------------------------------------------------------------------
+;;;; Xref Integration Policy
+;;;; -----------------------------------------------------------------------
+;; 1) In eglot-managed buffers, prefer LSP/xref only.
+;; 2) In non-LSP prog buffers, allow xref-union + dumb-jump fallback.
+;; 3) In sql-mode, keep custom SQL reference commands on `M-?' / `C-c ? s'.
+;;    (Those commands are explicit and separate from xref backend plumbing.)
+
+(defun my/xref-union-disable-in-eglot-managed-buffer ()
+  "Disable `xref-union-mode' when Eglot manages the current buffer."
+  (when (bound-and-true-p xref-union-mode)
+    (xref-union-mode -1)))
+
+(defun my/xref-union-excluded-backend-p (backend-fn)
+  "Return non-nil when BACKEND-FN should be excluded from xref-union."
+  (or (eq backend-fn #'etags--xref-backend)
+      ;; In LSP-managed buffers, avoid dumb-jump/rg shadowing Eglot xref.
+      (and (bound-and-true-p eglot--managed-mode)
+           (eq backend-fn #'dumb-jump-xref-activate))))
+
+(use-package eglot
+  :straight nil
+  :hook
+  ((go-ts-mode
+    c-ts-mode
+    c++-ts-mode
+    python-ts-mode
+    bash-ts-mode
+    yaml-ts-mode
+    rust-ts-mode
+    cmake-ts-mode
+    js-ts-mode
+    typescript-ts-mode
+    tsx-ts-mode
+    dockerfile-ts-mode
+    lua-ts-mode
+    html-ts-mode
+    css-ts-mode
+    java-ts-mode
+    zig-mode
+    odin-mode
+    haskell-mode
+    jai-mode
+    templ-ts-mode) . eglot-ensure)
+  :custom
+  (eglot-extend-to-xref t)
+  (eglot-autoshutdown t)
+  :bind (:map eglot-mode-map
+              ("C-c e r" . eglot-rename)
+              ("C-c e a" . eglot-code-actions)
+              ("C-c e f" . eglot-format)
+              ("C-c e i" . eglot-find-implementation)
+              ("C-c e o" . eglot-code-action-organize-imports))
+  :config
+  (add-hook 'eglot-managed-mode-hook
+            #'my/xref-union-disable-in-eglot-managed-buffer)
+  (add-to-list 'eglot-server-programs '(odin-mode . ("ols")))
+  (add-to-list 'eglot-server-programs '(zig-mode . ("zls")))
+  (add-to-list 'eglot-server-programs '(templ-ts-mode . ("templ" "lsp")))
+  (add-to-list 'eglot-server-programs '(glsl-mode . ("glslls" "--stdin")))
+  (add-to-list 'eglot-server-programs '(fish-mode . ("fish-lsp" "start")))
+  (add-to-list 'eglot-server-programs
+               '((haskell-mode) . ("haskell-language-server-wrapper" "--lsp")))
+  (add-to-list 'eglot-server-programs
+               `(jai-mode . (,(expand-file-name "~/projects/Jails/bin/jails")
+                             "-jai_path" ,(expand-file-name "~/jai/jai/")
+                             "-jai_exe_name" ,(pcase system-type
+                                               ('gnu/linux "jai-linux")
+                                               ('darwin "jai-macos")
+                                               ('windows-nt "jai.exe")
+                                               (_ "jai-linux"))))))
+
+;;;; dumb-jump — xref fallback for languages without stable LSP/tags.
+(use-package dumb-jump
+  :custom
+  (dumb-jump-prefer-searcher 'rg)
+  :config
+  ;; Append so language-aware backends (e.g. Eglot) run first.
+  (add-hook 'xref-backend-functions #'dumb-jump-xref-activate t))
+
+;;;; xref-union — combine xref backends (Eglot + dumb-jump fallback).
+(use-package xref-union
+  :custom
+  (xref-union-excluded-backends #'my/xref-union-excluded-backend-p)
+  :hook
+  ((prog-mode . xref-union-mode)
+   (sql-mode . xref-union-mode)))
+
+;;;; eglot-booster — faster JSON parsing for LSP communication.
+;; Requires: cargo install emacs-lsp-booster
+(use-package eglot-booster
+  :straight (:host github :repo "jdtsmith/eglot-booster")
+  :after eglot
+  :config
+  (eglot-booster-mode))
+
+;;;; consult-eglot — workspace symbol search.
+(use-package consult-eglot
+  :after (consult eglot)
+  :bind (:map eglot-mode-map
+              ("C-c e s" . consult-eglot-symbols)))
+
+;;;; eldoc-box — floating documentation at point.
+(use-package eldoc-box
+  :after eglot
+  :bind (:map eglot-mode-map
+              ("C-c e h" . eldoc-box-help-at-point)))
+
+;;;; Flymake keybindings (built-in, used by eglot for diagnostics).
+(use-package flymake
+  :straight nil
+  :bind (:map flymake-mode-map
+              ("C-c ! n" . flymake-goto-next-error)
+              ("C-c ! p" . flymake-goto-prev-error)
+              ("C-c ! l" . consult-flymake)
+              ("C-c ! L" . flymake-show-project-diagnostics)))
+
+;;;; Dape — Debug Adapter Protocol client.
+(use-package dape
+  :bind
+  (("C-c d d" . dape)
+   ("C-c d t" . cm/dape-go-debug-test-at-point)
+   ("C-c d m" . cm/dape-go-debug-main)
+   ("C-c d p" . cm/dape-go-debug-package-tests)))
+
+;;;; Go Dape wrappers.
+(defun cm/project-root-or-default ()
+  "Return project root if available, otherwise `default-directory'."
+  (if-let* ((project (project-current nil)))
+      (project-root project)
+    default-directory))
+
+(defun cm/go-test-name-at-point ()
+  "Return enclosing Go test name like `TestFoo', or nil."
+  (save-excursion
+    (end-of-line)
+    (when (re-search-backward
+           "^func[[:space:]]+\\(Test[[:alnum:]_]+\\)[[:space:]]*("
+           nil t)
+      (match-string-no-properties 1))))
+
+(defun cm/dape-go-debug-test-at-point ()
+  "Debug Go test at point using Delve via Dape."
+  (interactive)
+  (let ((test (cm/go-test-name-at-point)))
+    (unless test
+      (user-error "No Go test function found at point"))
+    (let ((dape-configs
+           `((go-test-at-point
+              modes (go-mode go-ts-mode)
+              command "dlv"
+              command-args ("test" "." "--"
+                            "-test.run" ,(format "^%s$" test))
+              cwd ,(cm/project-root-or-default)
+              request "launch"
+              type "go"))))
+      (dape 'go-test-at-point))))
+
+(defun cm/dape-go-debug-main ()
+  "Debug Go main/package with optional build tags and CLI args using Dape."
+  (interactive)
+  (let* ((tags (string-trim (read-string "Build tags (empty for none): ")))
+         (args-input (string-trim (read-string "Program args: ")))
+         (program-args (if (string-empty-p args-input)
+                           nil
+                         (split-string-and-unquote args-input)))
+         (command-args
+          (append
+           (list "debug" ".")
+           (unless (string-empty-p tags)
+             (list "--build-flags" (concat "-tags=" tags)))
+           (when program-args
+             (append '("--") program-args)))))
+    (let ((dape-configs
+           `((go-main
+              modes (go-mode go-ts-mode)
+              command "dlv"
+              command-args ,command-args
+              cwd ,(cm/project-root-or-default)
+              request "launch"
+              type "go"))))
+      (dape 'go-main))))
+
+(defun cm/dape-go-debug-package-tests ()
+  "Debug Go package tests, with optional build tags and -test.run pattern."
+  (interactive)
+  (let* ((tags (string-trim (read-string "Build tags (empty for none): ")))
+         (test-run (string-trim (read-string "Test run regex (empty for all): ")))
+         (command-args
+          (append
+           (list "test" ".")
+           (unless (string-empty-p tags)
+             (list "--build-flags" (concat "-tags=" tags)))
+           (unless (string-empty-p test-run)
+             (list "--" "-test.run" test-run)))))
+    (let ((dape-configs
+           `((go-package-tests
+              modes (go-mode go-ts-mode)
+              command "dlv"
+              command-args ,command-args
+              cwd ,(cm/project-root-or-default)
+              request "launch"
+              type "go"))))
+      (dape 'go-package-tests))))
+
+;;; -----------------------------------------------------------------------
+;;; Language configurations
+;;; -----------------------------------------------------------------------
+
+;;;; Go.
+;; go-ts-mode and go-mod-ts-mode are built-in; gopls is eglot's default.
+(setq go-ts-mode-indent-offset 4)
+
+(add-hook 'go-ts-mode-hook
+          (lambda ()
+            (setq-local tab-width 4)
+            (setq-local indent-tabs-mode t)
+            (add-hook 'before-save-hook #'eglot-format nil t)))
+
+(use-package gotest
+  :after go-ts-mode
+  :bind (:map go-ts-mode-map
+              ("C-c t t" . go-test-current-test)
+              ("C-c t f" . go-test-current-file)
+              ("C-c t p" . go-test-current-project)))
+
+;;;; go-templ.
+(use-package templ-ts-mode
+  :straight (:host github :repo "danderson/templ-ts-mode"))
+
+;;;; GLSL.
+(use-package glsl-mode)
+
+;;;; SQL.
+;; SQL buffers should always indent with spaces, never literal tabs.
+(setq sql-product 'postgres)
+
+(defun cm/sql--sqli-buffer-or-error ()
+  "Return active SQLi buffer or raise a user error."
+  (or (sql-find-sqli-buffer)
+      (user-error "No SQL interactive buffer found")))
+
+(defun cm/sql--object-bounds ()
+  "Return bounds of SQL identifier/object at point."
+  (save-excursion
+    (let ((origin (point)))
+      (goto-char origin)
+      (skip-chars-backward "[:alnum:]_$.")
+      (let ((beg (point)))
+        (goto-char origin)
+        (skip-chars-forward "[:alnum:]_$.")
+        (cons beg (point))))))
+
+(defun cm/sql-refresh-completions (&optional schema)
+  "Refresh SQL object/column completion cache for optional SCHEMA."
+  (interactive)
+  (let ((sqlbuf (cm/sql--sqli-buffer-or-error)))
+    (with-current-buffer sqlbuf
+      (setq-local sql-completion-object nil)
+      (setq-local sql-completion-column nil)
+      (sql-build-completions schema)
+      (message "SQL completions refreshed (%d objects)"
+               (length sql-completion-object)))))
+
+;;;; SQL xref helpers.
+(defconst cm/sql-xref-rg-globs
+  '("*.go" "*.py" "*.ts" "*.tsx" "*.js" "*.jsx" "*.java" "*.scala"
+    "*.sql" "*.psql" "*.yaml" "*.yml" "*.json" "*.toml")
+  "File globs to search for SQL object references in project files.")
+
+(defconst cm/sql-xref-sql-only-globs
+  '("*.sql" "*.psql")
+  "File globs to search only SQL files for references.")
+
+(defcustom cm/sql-xref-strict-identifiers nil
+  "When non-nil, use stricter token-like matching for plain identifiers."
+  :type 'boolean
+  :group 'sql)
+
+(defun cm/sql--project-root ()
+  "Return best-effort project root for SQL reference searches."
+  (expand-file-name
+   (or
+    (when-let* ((project (project-current nil)))
+      (project-root project))
+    (let ((dir (file-truename default-directory)))
+      (or (locate-dominating-file dir ".git")
+          (locate-dominating-file dir "go.mod")
+          (locate-dominating-file dir "pyproject.toml")
+          (locate-dominating-file dir "package.json")
+          (locate-dominating-file dir ".projectile")))
+    default-directory)))
+
+(defun cm/sql--identifier-at-point ()
+  "Return SQL object-like identifier near point, without text properties."
+  (let* ((bounds (cm/sql--object-bounds))
+         (beg (car bounds))
+         (end (cdr bounds))
+         (ident (buffer-substring-no-properties beg end)))
+    (unless (string-empty-p ident)
+      ident)))
+
+(defun cm/sql--normalize-identifier (identifier)
+  "Normalize IDENTIFIER from xref to a usable string, or nil."
+  (let ((id (cond
+             ((stringp identifier) identifier)
+             ((symbolp identifier) (symbol-name identifier))
+             (t nil))))
+    (when id
+      (let ((trimmed (string-trim id)))
+        (unless (string-empty-p trimmed)
+          trimmed)))))
+
+(defun cm/sql--identifier-search-variants (identifier)
+  "Return likely search variants for SQL IDENTIFIER in non-SQL code."
+  (let* ((raw (cm/sql--normalize-identifier identifier))
+         (dequoted (replace-regexp-in-string "\"" "" raw))
+         (parts (split-string dequoted "\\." t))
+         (leaf (car (last parts)))
+         (variants (list raw dequoted)))
+    ;; In code, SQL objects are often referenced without schema qualification.
+    (when (and leaf (not (string= leaf dequoted)))
+      (push leaf variants))
+    (delete-dups (seq-filter (lambda (s) (and s (not (string-empty-p s)))) variants))))
+
+(defun cm/sql--reference-files (root &optional globs)
+  "Return candidate files under ROOT for SQL reference searching.
+Optional GLOBS overrides `cm/sql-xref-rg-globs'."
+  (let* ((search-root (expand-file-name root))
+         (file-globs (or globs cm/sql-xref-rg-globs))
+         (files
+         (if (executable-find "rg")
+             (let ((args (append '("--files")
+                                 (mapcar (lambda (glob) (concat "--glob=" glob))
+                                         file-globs)
+                                 (list search-root))))
+               (ignore-errors (apply #'process-lines "rg" args)))
+           (directory-files-recursively search-root ".*" t))))
+    (seq-filter #'file-regular-p (or files '()))))
+
+(defun cm/sql--identifier-regexp (identifier)
+  "Build a practical regexp for IDENTIFIER references."
+  (let* ((variants (cm/sql--identifier-search-variants identifier))
+         (parts
+          (mapcar
+           (lambda (v)
+             (let ((q (regexp-quote v)))
+               (if (and cm/sql-xref-strict-identifiers
+                        (string-match-p "\\`[a-zA-Z_][a-zA-Z0-9_]*\\'" v))
+                   (format "\\(^\\|[^[:alnum:]_$]\\)\\(%s\\)\\([^[:alnum:]_$]\\|$\\)" q)
+                 q)))
+           variants)))
+    (string-join parts "\\|")))
+
+(defun cm/sql--xref-collect (identifier &optional globs)
+  "Collect xref candidates for IDENTIFIER across project files.
+Optional GLOBS narrows searched file types."
+  (let* ((root (cm/sql--project-root))
+         (files (cm/sql--reference-files root globs))
+         (regexp (cm/sql--identifier-regexp identifier))
+         (case-fold-search nil))
+    (if (null files)
+        (user-error "No candidate files found under %s" root)
+      (xref-matches-in-files regexp files))))
+
+;;;; SQL xref interactive commands.
+(defun cm/sql-find-references (&optional prefix identifier)
+  "Find IDENTIFIER references across project files from SQL buffers.
+Uses project file scanning and displays matches via xref."
+  (interactive "P")
+  (let* ((default (cm/sql--normalize-identifier
+                   (or identifier
+                       (cm/sql--identifier-at-point)
+                       (thing-at-point 'symbol t))))
+         (prompt (if default
+                     (format "Find references (default %s): " default)
+                   "Find references: "))
+         (query (string-trim (read-string prompt nil nil default))))
+    (when (string-empty-p query)
+      (user-error "No identifier provided"))
+    (let ((cm/sql-xref-strict-identifiers
+           (or cm/sql-xref-strict-identifiers prefix))
+          (xrefs (cm/sql--xref-collect query)))
+      (if xrefs
+          (xref--show-xrefs xrefs nil)
+        (user-error "No references found for %s" query)))))
+
+(defun cm/sql-find-references-sql-only (&optional prefix identifier)
+  "Find IDENTIFIER references in SQL files only."
+  (interactive "P")
+  (let* ((default (cm/sql--normalize-identifier
+                   (or identifier
+                       (cm/sql--identifier-at-point)
+                       (thing-at-point 'symbol t))))
+         (prompt (if default
+                     (format "Find SQL references (default %s): " default)
+                   "Find SQL references: "))
+         (query (string-trim (read-string prompt nil nil default))))
+    (when (string-empty-p query)
+      (user-error "No identifier provided"))
+    (let ((cm/sql-xref-strict-identifiers
+           (or cm/sql-xref-strict-identifiers prefix))
+          (xrefs (cm/sql--xref-collect query cm/sql-xref-sql-only-globs)))
+      (if xrefs
+          (xref--show-xrefs xrefs nil)
+        (user-error "No SQL-file references found for %s" query)))))
+
+(defun cm/sql--pg-dequote-safe-identifiers (s)
+  "Drop unnecessary quotes in PostgreSQL identifier string S.
+Only dequote identifiers that are already lowercase and contain
+characters accepted unquoted by PostgreSQL."
+  (replace-regexp-in-string
+   "\"\\([a-z_][a-z0-9_$]*\\)\""
+   "\\1"
+   s))
+
+(defun cm/sql-complete-object (&optional refresh)
+  "Complete SQL object name at point.
+With prefix argument REFRESH, rebuild completion cache first."
+  (interactive "P")
+  (let* ((sqlbuf (cm/sql--sqli-buffer-or-error))
+         (sql-completion-sqlbuf sqlbuf)
+         (product (with-current-buffer sqlbuf sql-product))
+         (completion-ignore-case t))
+    (unless (sql-get-product-feature product :completion-object)
+      (user-error "%s does not support SQL object completion" product))
+    (when refresh
+      (cm/sql-refresh-completions))
+    (with-current-buffer sqlbuf
+      (unless sql-completion-object
+        (sql-build-completions nil)))
+    (let* ((bounds (cm/sql--object-bounds))
+           (beg (car bounds))
+           (end (cdr bounds))
+           (initial (buffer-substring-no-properties beg end))
+           (choice (completing-read "SQL object: "
+                                    #'sql--completion-table nil nil initial)))
+      (when (eq product 'postgres)
+        (setq choice (cm/sql--pg-dequote-safe-identifiers choice)))
+      (delete-region beg end)
+      (insert choice))))
+
+(use-package sql
+  :straight nil
+  :bind (:map sql-mode-map
+              ("M-?"     . cm/sql-find-references)
+              ("C-c ? s" . cm/sql-find-references-sql-only)
+              ("C-c C-o"   . cm/sql-complete-object)
+              ("C-c C-l r" . cm/sql-refresh-completions))
+  :hook
+  ((sql-mode . (lambda ()
+                 (setq-local indent-tabs-mode nil)
+                 ;; Keep union enabled for non-LSP SQL buffers; references are
+                 ;; primarily handled by explicit SQL commands bound above.
+                 (xref-union-mode 1)))
+   (sql-interactive-mode . (lambda ()
+                             (setq-local indent-tabs-mode nil)))))
+
+;;;; C / C++.
+;; c-ts-mode and c++-ts-mode are built-in; clangd is eglot's default.
+
+;;;; Odin.
+(use-package odin-mode
+  :straight (:host sourcehut :repo "mgmarlow/odin-mode")
+  :mode "\\.odin\\'")
+
+;;;; Zig.
+(use-package zig-mode)
+
+;;;; Python.
+;; python-ts-mode is built-in; pyright/pylsp are eglot defaults.
+
+;;;; Bash.
+;; bash-ts-mode is built-in; bash-language-server is eglot's default.
+
+;;;; Fish.
+(use-package fish-mode)
+
+;;;; YAML.
+;; yaml-ts-mode is built-in; yaml-language-server is eglot's default.
+
+;;;; TOML.
+;; toml-ts-mode is built-in; no LSP needed.
+
+;;;; Rust.
+;; rust-ts-mode is built-in; rust-analyzer is eglot's default.
+
+;;;; CMake.
+;; cmake-ts-mode is built-in; cmake-language-server is eglot's default.
+
+;;;; Markdown.
+(use-package markdown-mode
+  :mode ("\\.md\\'" . gfm-mode)
+  :custom
+  (markdown-fontify-code-blocks-natively t))
+
+;;;; JavaScript / TypeScript.
+;; js-ts-mode, typescript-ts-mode, tsx-ts-mode are built-in.
+;; typescript-language-server is eglot's default.
+
+;;;; Dockerfile.
+;; dockerfile-ts-mode is built-in.
+
+;;;; Lua.
+;; lua-ts-mode is built-in (Emacs 30); lua-language-server is eglot's default.
+
+;;;; HTML / CSS.
+;; html-ts-mode and css-ts-mode are built-in.
+;; vscode-html/css-language-server are eglot defaults.
+(use-package web-mode
+  :mode ("\\.vue\\'" "\\.svelte\\'" "\\.njk\\'" "\\.hbs\\'"))
+
+;;;; Java.
+;; java-ts-mode is built-in; jdtls is eglot's default.
+;; Install eclipse.jdt.ls and ensure it is on your PATH.
+
+;;;; Jai.
+(use-package jai-mode
+  :straight (:host github :repo "elp-revive/jai-mode")
+  :mode "\\.jai\\'")
+
+;;;; Haskell.
+(use-package haskell-mode)
+
+;;;; CSV.
+(use-package csv-mode)
+
+;;;; org-mode.
+(use-package org
+  :straight nil
+  :custom
+  (org-hide-leading-stars t)
+  (org-startup-indented t)
+  (org-indent-indentation-per-level 2)
+  :hook
+  ((org-mode . visual-line-mode)
+   (org-mode . org-indent-mode)
+   (org-mode . my/org-apply-heading-scale)))
+
+;;;; org heading sizing.
+(defvar my/org-heading-scale-factor 1.2
+  "Multiplier used to enlarge org heading faces.")
+
+(defvar my/org-heading-base-heights nil
+  "Original org heading heights captured from the active theme.")
+
+(defun my/org-heading-faces-ready-p (faces)
+  "Return non-nil when every face in FACES has been defined."
+  (catch 'missing
+    (dolist (face faces t)
+      (unless (facep face)
+        (throw 'missing nil)))))
+
+(defun my/org-apply-heading-scale ()
+  "Scale `org-level-*' faces by `my/org-heading-scale-factor'."
+  (let ((faces '(org-level-1 org-level-2 org-level-3 org-level-4
+                             org-level-5 org-level-6 org-level-7 org-level-8)))
+    (when (my/org-heading-faces-ready-p faces)
+      (unless my/org-heading-base-heights
+        (setq my/org-heading-base-heights
+              (mapcar (lambda (face)
+                        (cons face (face-attribute face :height nil 'default)))
+                      faces)))
+      (dolist (entry my/org-heading-base-heights)
+        (let ((face (car entry))
+              (height (cdr entry)))
+          (when (numberp height)
+            (set-face-attribute
+             face nil :height
+             (truncate (* (if (integerp height) height (* 100 height))
+                          my/org-heading-scale-factor)))))))))
+
+(defun my/org-refresh-heading-scale (&rest _)
+  "Recompute and apply org heading scale after theme changes."
+  (setq my/org-heading-base-heights nil)
+  (my/org-apply-heading-scale))
+
+(advice-add 'load-theme :after #'my/org-refresh-heading-scale)
+(my/org-apply-heading-scale)
+
+(setq shift-select-mode 'permanent)
+
+;;;; Keybinding cheat sheet (high-frequency).
+;; Search/navigation:
+;;   C-S-s   consult-line (region-seeded)
+;;   C-c s   consult-ripgrep (region-seeded)
+;;   M-s .   consult-ripgrep thing-at-point (literal)
+;;   M-s ,   consult-ripgrep thing-at-point (regexp)
+;;   M-s q   consult-ripgrep thing-at-point in SQL files only
+;;   M-s g   consult-git-grep (region-seeded)
+;;   M-g e   consult-compile-error
+;;
+;; Actions/completion:
+;;   C-.     embark-act
+;;   C-;     embark-dwim
+;;   M-R     vertico-repeat
+;;   C-=     er/expand-region
+;;   C--     er/contract-region
+
+
+;;; init.el ends here

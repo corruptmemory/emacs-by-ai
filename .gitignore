@@ -1,0 +1,34 @@
+# Machine-specific overrides
+local-settings.el
+
+# straight.el package manager (cloned repos, build cache)
+straight/
+
+# Native compilation cache
+eln-cache/
+
+# Tree-sitter compiled grammars
+tree-sitter/
+
+# Session state files
+auto-save-list/
+saves/
+history
+recentf
+saveplace
+prescient-save.el
+projects
+tramp
+transient/
+custom.el
+
+# Byte-compiled elisp
+*.elc
+
+# Emacs lock files
+.#*
+
+# Claude Code
+.cache/
+.claude/
+AGENTS.md

@@ -80,6 +80,10 @@
 ;;;; Replace active region when typing.
 (delete-selection-mode 1)
 
+;;;; Electric indent — re-indent automatically on newline and certain characters.
+;; On by default in Emacs 29+; made explicit for clarity.
+(electric-indent-mode 1)
+
 ;;;; Tab display/indent defaults.
 ;; Keep literal tab characters visually narrow unless a mode overrides it.
 (setq-default tab-width 4)
@@ -562,10 +566,17 @@ Seeding is skipped for multi-line or very large regions."
 
 ;;;; Multiple-cursors.
 (use-package multiple-cursors
+  :custom
+  (mc/always-run-for-all t)
   :bind
-  (("C->"     . mc/mark-next-like-this)
-   ("C-<"     . mc/mark-previous-like-this)
-   ("C-c C-<" . mc/mark-all-like-this)))
+  (("C->"         . mc/mark-next-like-this)
+   ("C-<"         . mc/mark-previous-like-this)
+   ("C-c C-<"     . mc/mark-all-like-this)
+   ("C-S-c C-S-c" . mc/edit-lines)
+   ("C-M->"       . mc/mark-next-like-this-symbol)
+   ("C-M-<"       . mc/mark-previous-like-this-symbol)
+   ("C-\""        . mc/skip-to-next-like-this)
+   ("C-:"         . mc/skip-to-previous-like-this)))
 
 ;;;; expand-region — semantic region expansion/shrinking.
 (use-package expand-region
@@ -578,6 +589,25 @@ Seeding is skipped for multi-line or very large regions."
   :bind
   (:map prog-mode-map
         ("C-c C-u" . string-inflection-all-cycle)))
+
+;;;; smartparens — auto-pairing and structured editing of delimiters.
+(use-package smartparens
+  :init
+  (smartparens-global-mode 1)
+  :config
+  (require 'smartparens-config))
+
+;;;; Spell checking — flyspell in text modes, flyspell-prog in code.
+(use-package flyspell
+  :straight nil
+  :hook
+  ((text-mode . flyspell-mode)
+   (prog-mode . flyspell-prog-mode))
+  :config
+  (defun cm/flyspell-buffer-after-enable ()
+    "Spell-check entire buffer shortly after flyspell starts."
+    (run-with-idle-timer 0.5 nil #'flyspell-buffer))
+  (add-hook 'flyspell-mode-hook #'cm/flyspell-buffer-after-enable))
 
 ;;;; Magit — Git interface.
 (use-package magit
@@ -622,6 +652,11 @@ Seeding is skipped for multi-line or very large regions."
   (popper-mode)
   (popper-echo-mode))
 
+;;;; vterm — terminal emulator.
+(use-package vterm
+  :custom
+  (vterm-max-scrollback 10000))
+
 ;;;; diff-hl — highlight uncommitted changes in the fringe.
 (use-package diff-hl
   :custom
@@ -631,7 +666,9 @@ Seeding is skipped for multi-line or very large regions."
    (magit-post-refresh . diff-hl-magit-post-refresh)
    (dired-mode         . diff-hl-dired-mode))
   :init
-  (global-diff-hl-mode))
+  (global-diff-hl-mode)
+  :config
+  (diff-hl-flydiff-mode 1))
 
 ;;;; all-the-icons.
 (use-package all-the-icons
@@ -645,6 +682,11 @@ Seeding is skipped for multi-line or very large regions."
 ;;;; ws-butler — unobtrusive whitespace trimming.
 (use-package ws-butler
   :hook (prog-mode . ws-butler-mode))
+
+;;;; editorconfig — respect .editorconfig project settings.
+(use-package editorconfig
+  :init
+  (editorconfig-mode 1))
 
 ;;;; wgrep — editable grep buffers (useful with Embark-Consult exports).
 (use-package wgrep)
@@ -766,6 +808,7 @@ Valid entries must have a regexp string as their car."
   :custom
   (eglot-extend-to-xref t)
   (eglot-autoshutdown t)
+  (eglot-autoreconnect t)
   :bind (:map eglot-mode-map
               ("C-c e r" . eglot-rename)
               ("C-c e a" . eglot-code-actions)
@@ -1224,6 +1267,10 @@ With prefix argument REFRESH, rebuild completion cache first."
 ;;;; Dockerfile.
 ;; dockerfile-ts-mode is built-in.
 
+;;;; docker — manage containers, images, volumes, and networks.
+(use-package docker
+  :bind ("C-c D" . docker))
+
 ;;;; Lua.
 ;; lua-ts-mode is built-in (Emacs 30); lua-language-server is eglot's default.
 
@@ -1244,6 +1291,14 @@ With prefix argument REFRESH, rebuild completion cache first."
 
 ;;;; Haskell.
 (use-package haskell-mode)
+
+;;;; pdf-tools — PDF viewer with annotation support.
+(use-package pdf-tools
+  :mode ("\\.pdf\\'" . pdf-view-mode)
+  :custom
+  (pdf-view-display-size 'fit-page)
+  :config
+  (pdf-tools-install :no-query))
 
 ;;;; CSV.
 (use-package csv-mode)

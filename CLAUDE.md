@@ -22,7 +22,7 @@ emacs --init-directory=~/projects/emacs-again/
 The file is organized in this order:
 
 1. **Startup/bootstrap** — timing display, straight.el bootstrap, use-package integration
-2. **Core settings** — custom file, local overrides, backups, auto-revert, tabs, recentf, saveplace
+2. **Core settings** — custom file, local overrides, backups, auto-revert, delete-selection, electric-indent, tabs, recentf, saveplace
 3. **PATH** — adds ~/.cargo/bin, ~/.local/bin, ~/go/bin, ~/projects/Odin, ~/projects/ols to exec-path
 4. **Theme and fonts** — loads dracula-pro-blade, sets TX-02/Fira Sans/JoyPixels, auto-adjusts fringe contrast
 5. **Scrolling** — pixel-scroll-precision-mode with wheel/trackpad profiles driven by `cm/mouse-profile`
@@ -30,11 +30,11 @@ The file is organized in this order:
 7. **Minibuffer completion** — Vertico (+ directory, repeat, multiform extensions), Orderless, Marginalia, savehist, prescient
 8. **Consult** — region-seeded and thing-at-point search wrappers (`cm/` prefix), embark integration
 9. **In-buffer completion** — Corfu (+ history, popupinfo), tempel, cape, kind-icon
-10. **Editing packages** — multiple-cursors, expand-region, string-inflection
-11. **Git** — Magit, diff-hl
-12. **Popup/buffer management** — Popper with project-based grouping, helpful
-13. **Dev tooling** — treesit-auto, yasnippet, eglot (20+ language hooks), eglot-booster, consult-eglot, eldoc-box, flymake, dape (DAP)
-14. **Language configs** — Go (format-on-save, gotest, dape wrappers), SQL (xref helpers, completion), then all other languages
+10. **Editing packages** — multiple-cursors (with symbol-aware mark/skip bindings), expand-region, string-inflection, smartparens, flyspell (text + prog-mode comments/strings)
+11. **Git** — Magit, diff-hl (with flydiff for unsaved-change indicators)
+12. **Popup/buffer management** — Popper with project-based grouping, helpful, vterm
+13. **Dev tooling** — treesit-auto, yasnippet, eglot (20+ language hooks, autoreconnect), eglot-booster, consult-eglot, eldoc-box, flymake, dape (DAP)
+14. **Language configs** — Go (format-on-save, gotest, dape wrappers), SQL (xref helpers, completion), docker, pdf-tools, then all other languages
 
 ## Naming Conventions
 

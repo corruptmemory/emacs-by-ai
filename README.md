@@ -27,11 +27,11 @@ On first launch, `straight.el` bootstraps itself and installs all packages. Tree
 
 ## Completion stack
 
-Vertico + Orderless + Consult + Marginalia + Embark in the minibuffer; Corfu + Cape + kind-icon in-buffer. Prescient provides frequency/recency sorting for Vertico.
+Vertico + Orderless + Consult + Marginalia + Embark in the minibuffer; Corfu + Cape + kind-icon in-buffer. Prescient provides frequency/recency sorting for Vertico. Smartparens handles auto-pairing and structured delimiter editing.
 
 ## LSP
 
-Eglot (built-in) with eglot-booster for performance. Hooks are wired for 20+ language modes. Custom LSP server entries for Odin (`ols`), Zig (`zls`), Jai (`jails`), go-templ, GLSL, Fish, and Haskell. xref-union combines Eglot's xref backend with dumb-jump as a fallback in non-LSP buffers.
+Eglot (built-in) with eglot-booster for performance and autoreconnect on server crashes. Hooks are wired for 20+ language modes. Custom LSP server entries for Odin (`ols`), Zig (`zls`), Jai (`jails`), go-templ, GLSL, Fish, and Haskell. xref-union combines Eglot's xref backend with dumb-jump as a fallback in non-LSP buffers.
 
 ## Debugging
 
@@ -46,7 +46,7 @@ Dape (DAP client) with custom Go/Delve wrappers for debugging tests (`cm/dape-go
 
 ## Custom editing commands
 
-Chunk-based word motion and deletion (`cm/move-right`, `cm/move-left`, `cm/backward-delete-word`, `cm/delete-word`) bound to `C-<arrow>` and `C-<backspace>`/`C-<delete>`. Line transposition via `cm/move-line-up`/`cm/move-line-down` on `M-<up>`/`M-<down>`. Toggle window split orientation with `cm/toggle-window-split` (`C-c |`).
+Chunk-based word motion and deletion (`cm/move-right`, `cm/move-left`, `cm/backward-delete-word`, `cm/delete-word`) bound to `C-<arrow>` and `C-<backspace>`/`C-<delete>`. Line transposition via `cm/move-line-up`/`cm/move-line-down` on `M-<up>`/`M-<down>`. Toggle window split orientation with `cm/toggle-window-split` (`C-c |`). Multiple-cursors includes symbol-aware mark (`C-M->`, `C-M-<`), skip (`C-"`, `C-:`), and `mc/edit-lines` (`C-S-c C-S-c`).
 
 ## Function keys
 
@@ -65,6 +65,15 @@ Custom xref-based cross-project reference search for SQL identifiers:
 - `cm/sql-find-references-sql-only` (`C-c ? s`) — search SQL files only
 - `cm/sql-complete-object` (`C-c C-o`) — complete SQL object names from live SQLi connection
 - `cm/sql-refresh-completions` (`C-c C-l r`) — rebuild completion cache
+
+## Additional packages
+
+- **vterm** — full terminal emulator inside Emacs (fish shell, 10k scrollback)
+- **editorconfig** — automatically applies `.editorconfig` project settings
+- **flyspell** — spell checking in text modes and comments/strings in code
+- **diff-hl flydiff** — live fringe indicators for unsaved changes (not just uncommitted)
+- **docker** — manage containers, images, volumes, and networks (`C-c D`)
+- **pdf-tools** — PDF viewer with annotation support (fit-page by default)
 
 ## Fonts
 
@@ -96,3 +105,7 @@ Run `M-x all-the-icons-install-fonts` once after first install for icon support.
 | `haskell-language-server-wrapper` | Haskell LSP                                       |
 | `bash-language-server`            | Bash LSP                                          |
 | `fish-lsp`                        | Fish LSP                                          |
+| `aspell` or `hunspell`            | flyspell spell checking                           |
+| `cmake`, `libtool`, C compiler    | vterm module compilation (first use)              |
+| `poppler` (dev libs)              | pdf-tools `epdfinfo` build (first use)            |
+| `docker`                          | docker.el container/image management              |

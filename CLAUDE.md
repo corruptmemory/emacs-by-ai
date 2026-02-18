@@ -25,16 +25,16 @@ The file is organized in this order:
 2. **Core settings** — custom file, local overrides, backups, auto-revert, delete-selection, electric-indent, tabs, recentf, saveplace
 3. **PATH** — adds ~/.cargo/bin, ~/.local/bin, ~/go/bin, ~/projects/Odin, ~/projects/ols to exec-path
 4. **Theme and fonts** — loads dracula-pro-blade, sets TX-02/Fira Sans/JoyPixels, auto-adjusts fringe contrast
-5. **Scrolling** — pixel-scroll-precision-mode with wheel/trackpad profiles driven by `cm/mouse-profile`
-6. **Keybindings and editing** — windmove, chunk word motion (`cm/` prefix), line movement, sexp navigation
+5. **Scrolling** — pixel-scroll-precision-mode with wheel/trackpad profiles driven by `cm/mouse-profile`; trackpad flips horizontal scroll and disables interpolated page scroll for instant PgUp/PgDn
+6. **Keybindings and editing** — windmove, quick toggles (`C-c T` prefix), chunk word motion (`cm/` prefix), line movement, sexp navigation
 7. **Minibuffer completion** — Vertico (+ directory, repeat, multiform extensions), Orderless, Marginalia, savehist, prescient
 8. **Consult** — region-seeded and thing-at-point search wrappers (`cm/` prefix), embark integration
 9. **In-buffer completion** — Corfu (+ history, popupinfo), tempel, cape, kind-icon
-10. **Editing packages** — multiple-cursors (with symbol-aware mark/skip bindings), expand-region, string-inflection, smartparens, flyspell (text + prog-mode comments/strings)
+10. **Editing packages** — multiple-cursors (with symbol-aware mark/skip bindings), expand-region, string-inflection, smartparens, flyspell (text-like modes only: text, org, markdown)
 11. **Git** — Magit, diff-hl (with flydiff for unsaved-change indicators)
 12. **Popup/buffer management** — Popper with project-based grouping, helpful, vterm
 13. **Dev tooling** — treesit-auto, yasnippet, eglot (20+ language hooks, autoreconnect), eglot-booster, consult-eglot, eldoc-box, flymake, dape (DAP)
-14. **Language configs** — Go (format-on-save, gotest, dape wrappers), SQL (xref helpers, completion), docker, pdf-tools, then all other languages
+14. **Language configs** — Go (format-on-save, gotest, dape/Delve wrappers with auto-breakpoint), SQL (xref helpers, completion), docker, pdf-tools, then all other languages
 
 ## Naming Conventions
 

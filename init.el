@@ -172,10 +172,11 @@
   (pcase cm/mouse-profile
     ('trackpad
      (setq pixel-scroll-precision-use-momentum t
-           pixel-scroll-precision-interpolate-page t
+           pixel-scroll-precision-interpolate-page nil
            pixel-scroll-precision-interpolate-mice t
            mouse-wheel-progressive-speed nil
            mouse-wheel-tilt-scroll t
+           mouse-wheel-flip-direction t
            mouse-wheel-scroll-amount '(1 ((shift) . hscroll))
            mouse-wheel-scroll-amount-horizontal 2))
     (_
@@ -225,6 +226,15 @@ Preserves buffer contents, scroll positions, and selection."
       (select-window win1))))
 
 (global-set-key (kbd "C-c |") #'cm/toggle-window-split)
+
+;;;; Quick toggles — C-c T prefix.
+(defvar cm/toggles-map (make-sparse-keymap)
+  "Keymap for quick mode toggles under `C-c T'.")
+(global-set-key (kbd "C-c T") cm/toggles-map)
+(define-key cm/toggles-map (kbd "w") #'visual-line-mode)
+(define-key cm/toggles-map (kbd "t") #'toggle-truncate-lines)
+(define-key cm/toggles-map (kbd "s") #'whitespace-mode)
+(define-key cm/toggles-map (kbd "f") #'flyspell-mode)
 
 ;;;; Word motion/deletion tuned for editor-like chunk behavior.
 (defun cm/relevant-match-syntax (in)
@@ -597,12 +607,13 @@ Seeding is skipped for multi-line or very large regions."
   :config
   (require 'smartparens-config))
 
-;;;; Spell checking — flyspell in text modes, flyspell-prog in code.
+;;;; Spell checking — flyspell in text-like modes only.
 (use-package flyspell
   :straight nil
   :hook
   ((text-mode . flyspell-mode)
-   (prog-mode . flyspell-prog-mode))
+   (org-mode . flyspell-mode)
+   (markdown-mode . flyspell-mode))
   :config
   (defun cm/flyspell-buffer-after-enable ()
     "Spell-check entire buffer shortly after flyspell starts."
@@ -897,22 +908,46 @@ Valid entries must have a regexp string as their car."
            nil t)
       (match-string-no-properties 1))))
 
+(defun cm/go-test-func-line ()
+  "Return the line number of the enclosing Go test function signature, or nil."
+  (save-excursion
+    (end-of-line)
+    (when (re-search-backward
+           "^func[[:space:]]+Test[[:alnum:]_]+[[:space:]]*("
+           nil t)
+      (line-number-at-pos (point)))))
+
 (defun cm/dape-go-debug-test-at-point ()
-  "Debug Go test at point using Delve via Dape."
+  "Debug Go test at point using Delve via Dape.
+Automatically places a breakpoint on the test function's first line
+if one isn't already set there."
   (interactive)
+  (require 'dape)
   (let ((test (cm/go-test-name-at-point)))
     (unless test
       (user-error "No Go test function found at point"))
-    (let ((dape-configs
-           `((go-test-at-point
-              modes (go-mode go-ts-mode)
-              command "dlv"
-              command-args ("test" "." "--"
-                            "-test.run" ,(format "^%s$" test))
-              cwd ,(cm/project-root-or-default)
-              request "launch"
-              type "go"))))
-      (dape 'go-test-at-point))))
+    ;; Ensure a breakpoint exists on the test function's opening line.
+    (when-let* ((func-line (cm/go-test-func-line)))
+      (save-excursion
+        (goto-char (point-min))
+        (forward-line (1- func-line))
+        ;; Move to the line after the signature (first line of body).
+        (forward-line 1)
+        (unless (dape--breakpoints-at-point)
+          (dape-breakpoint-toggle))))
+    (let ((pkg-dir (file-name-directory (buffer-file-name))))
+      (dape `(modes (go-mode go-ts-mode)
+               command "dlv"
+               command-args ("dap" "--listen" "127.0.0.1::autoport")
+               command-cwd ,pkg-dir
+               command-insert-stderr t
+               port :autoport
+               :request "launch"
+               :type "go"
+               :mode "test"
+               :cwd ,pkg-dir
+               :program "."
+               :args ["-test.run" ,(format "^%s$" test)])))))
 
 (defun cm/dape-go-debug-main ()
   "Debug Go main/package with optional build tags and CLI args using Dape."
@@ -920,46 +955,51 @@ Valid entries must have a regexp string as their car."
   (let* ((tags (string-trim (read-string "Build tags (empty for none): ")))
          (args-input (string-trim (read-string "Program args: ")))
          (program-args (if (string-empty-p args-input)
-                           nil
-                         (split-string-and-unquote args-input)))
-         (command-args
-          (append
-           (list "debug" ".")
-           (unless (string-empty-p tags)
-             (list "--build-flags" (concat "-tags=" tags)))
-           (when program-args
-             (append '("--") program-args)))))
-    (let ((dape-configs
-           `((go-main
-              modes (go-mode go-ts-mode)
-              command "dlv"
-              command-args ,command-args
-              cwd ,(cm/project-root-or-default)
-              request "launch"
-              type "go"))))
-      (dape 'go-main))))
+                           []
+                         (vconcat (split-string-and-unquote args-input))))
+         (build-flags (if (string-empty-p tags)
+                          ""
+                        (concat "-tags=" tags))))
+    (let ((pkg-dir (file-name-directory (buffer-file-name))))
+      (dape `(modes (go-mode go-ts-mode)
+               command "dlv"
+               command-args ("dap" "--listen" "127.0.0.1::autoport")
+               command-cwd ,pkg-dir
+               command-insert-stderr t
+               port :autoport
+               :request "launch"
+               :type "go"
+               :mode "debug"
+               :cwd ,pkg-dir
+               :program "."
+               :args ,program-args
+               :buildFlags ,build-flags)))))
 
 (defun cm/dape-go-debug-package-tests ()
   "Debug Go package tests, with optional build tags and -test.run pattern."
   (interactive)
   (let* ((tags (string-trim (read-string "Build tags (empty for none): ")))
          (test-run (string-trim (read-string "Test run regex (empty for all): ")))
-         (command-args
-          (append
-           (list "test" ".")
-           (unless (string-empty-p tags)
-             (list "--build-flags" (concat "-tags=" tags)))
-           (unless (string-empty-p test-run)
-             (list "--" "-test.run" test-run)))))
-    (let ((dape-configs
-           `((go-package-tests
-              modes (go-mode go-ts-mode)
-              command "dlv"
-              command-args ,command-args
-              cwd ,(cm/project-root-or-default)
-              request "launch"
-              type "go"))))
-      (dape 'go-package-tests))))
+         (build-flags (if (string-empty-p tags)
+                          ""
+                        (concat "-tags=" tags)))
+         (args (if (string-empty-p test-run)
+                   []
+                 `["-test.run" ,test-run])))
+    (let ((pkg-dir (file-name-directory (buffer-file-name))))
+      (dape `(modes (go-mode go-ts-mode)
+               command "dlv"
+               command-args ("dap" "--listen" "127.0.0.1::autoport")
+               command-cwd ,pkg-dir
+               command-insert-stderr t
+               port :autoport
+               :request "launch"
+               :type "go"
+               :mode "test"
+               :cwd ,pkg-dir
+               :program "."
+               :args ,args
+               :buildFlags ,build-flags)))))
 
 ;;; -----------------------------------------------------------------------
 ;;; Language configurations

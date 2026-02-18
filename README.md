@@ -35,7 +35,10 @@ Eglot (built-in) with eglot-booster for performance and autoreconnect on server 
 
 ## Debugging
 
-Dape (DAP client) with custom Go/Delve wrappers for debugging tests (`cm/dape-go-debug-test-at-point`), main (`cm/dape-go-debug-main`), and package tests (`cm/dape-go-debug-package-tests`).
+Dape (DAP client) with custom Go/Delve wrappers that use the DAP protocol (`dlv dap`) and are package-directory-aware:
+- `cm/dape-go-debug-test-at-point` (`C-c d t`) — debug test at point with auto-breakpoint on first line
+- `cm/dape-go-debug-main` (`C-c d m`) — debug main with optional build tags and CLI args
+- `cm/dape-go-debug-package-tests` (`C-c d p`) — debug package tests with optional filter and tags
 
 ## Navigation
 
@@ -46,7 +49,7 @@ Dape (DAP client) with custom Go/Delve wrappers for debugging tests (`cm/dape-go
 
 ## Custom editing commands
 
-Chunk-based word motion and deletion (`cm/move-right`, `cm/move-left`, `cm/backward-delete-word`, `cm/delete-word`) bound to `C-<arrow>` and `C-<backspace>`/`C-<delete>`. Line transposition via `cm/move-line-up`/`cm/move-line-down` on `M-<up>`/`M-<down>`. Toggle window split orientation with `cm/toggle-window-split` (`C-c |`). Multiple-cursors includes symbol-aware mark (`C-M->`, `C-M-<`), skip (`C-"`, `C-:`), and `mc/edit-lines` (`C-S-c C-S-c`).
+Chunk-based word motion and deletion (`cm/move-right`, `cm/move-left`, `cm/backward-delete-word`, `cm/delete-word`) bound to `C-<arrow>` and `C-<backspace>`/`C-<delete>`. Line transposition via `cm/move-line-up`/`cm/move-line-down` on `M-<up>`/`M-<down>`. Toggle window split orientation with `cm/toggle-window-split` (`C-c |`). Quick toggles under `C-c T`: word wrap (`w`), truncate lines (`t`), whitespace (`s`), flyspell (`f`). Multiple-cursors includes symbol-aware mark (`C-M->`, `C-M-<`), skip (`C-"`, `C-:`), and `mc/edit-lines` (`C-S-c C-S-c`).
 
 ## Function keys
 
@@ -70,7 +73,7 @@ Custom xref-based cross-project reference search for SQL identifiers:
 
 - **vterm** — full terminal emulator inside Emacs (fish shell, 10k scrollback)
 - **editorconfig** — automatically applies `.editorconfig` project settings
-- **flyspell** — spell checking in text modes and comments/strings in code
+- **flyspell** — spell checking in text-like modes only (text, org, markdown)
 - **diff-hl flydiff** — live fringe indicators for unsaved changes (not just uncommitted)
 - **docker** — manage containers, images, volumes, and networks (`C-c D`)
 - **pdf-tools** — PDF viewer with annotation support (fit-page by default)

@@ -322,6 +322,7 @@ Preserves buffer contents, scroll positions, and selection."
 (global-set-key (kbd "S-<f3>") #'kmacro-end-macro)
 (global-set-key (kbd "<f4>") #'kmacro-end-and-call-macro)
 (global-set-key (kbd "<f5>") #'project-compile)
+(global-set-key (kbd "<f6>") #'flyspell-buffer)
 (global-set-key (kbd "<f9>") #'next-error)
 (global-set-key (kbd "<f10>") #'previous-error)
 
@@ -616,8 +617,16 @@ Seeding is skipped for multi-line or very large regions."
    (markdown-mode . flyspell-mode))
   :config
   (defun cm/flyspell-buffer-after-enable ()
-    "Spell-check entire buffer shortly after flyspell starts."
-    (run-with-idle-timer 0.5 nil #'flyspell-buffer))
+    "Spell-check visible region shortly after flyspell starts."
+    (when flyspell-mode
+      (run-with-idle-timer
+       0.5 nil
+       (lambda (buf)
+         (when (buffer-live-p buf)
+           (with-current-buffer buf
+             (when flyspell-mode
+               (flyspell-region (window-start) (window-end))))))
+       (current-buffer))))
   (add-hook 'flyspell-mode-hook #'cm/flyspell-buffer-after-enable))
 
 ;;;; Magit — Git interface.

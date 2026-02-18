@@ -15,7 +15,7 @@ emacs --init-directory=~/projects/emacs-again/
 - `early-init.el` — GC tuning, UI suppression, native-comp settings, fringe/cursor config
 - `init.el` — Package management (straight.el + use-package), all packages, keybindings, language configs
 - `themes/` — Custom color themes (Dracula Pro Blade/Pro, Naysayer)
-- `local-settings.el` — Machine-specific overrides (git-ignored); sets `my/mouse-profile` etc.
+- `local-settings.el` — Machine-specific overrides (git-ignored); sets `cm/mouse-profile` etc.
 
 ## Architecture of init.el
 
@@ -25,10 +25,10 @@ The file is organized in this order:
 2. **Core settings** — custom file, local overrides, backups, auto-revert, tabs, recentf, saveplace
 3. **PATH** — adds ~/.cargo/bin, ~/.local/bin, ~/go/bin, ~/projects/Odin, ~/projects/ols to exec-path
 4. **Theme and fonts** — loads dracula-pro-blade, sets TX-02/Fira Sans/JoyPixels, auto-adjusts fringe contrast
-5. **Scrolling** — pixel-scroll-precision-mode with wheel/trackpad profiles driven by `my/mouse-profile`
+5. **Scrolling** — pixel-scroll-precision-mode with wheel/trackpad profiles driven by `cm/mouse-profile`
 6. **Keybindings and editing** — windmove, chunk word motion (`cm/` prefix), line movement, sexp navigation
 7. **Minibuffer completion** — Vertico (+ directory, repeat, multiform extensions), Orderless, Marginalia, savehist, prescient
-8. **Consult** — region-seeded and thing-at-point search wrappers (`my/` prefix), embark integration
+8. **Consult** — region-seeded and thing-at-point search wrappers (`cm/` prefix), embark integration
 9. **In-buffer completion** — Corfu (+ history, popupinfo), tempel, cape, kind-icon
 10. **Editing packages** — multiple-cursors, expand-region, string-inflection
 11. **Git** — Magit, diff-hl
@@ -38,8 +38,7 @@ The file is organized in this order:
 
 ## Naming Conventions
 
-- `my/` prefix — utility functions and variables for personal config plumbing
-- `cm/` prefix — interactive commands and editing functions (word motion, line movement, dape wrappers, SQL tools)
+- `cm/` prefix — all custom functions and variables (`cm` = corruptmemory)
 
 ## Themes
 

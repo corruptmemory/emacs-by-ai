@@ -12,7 +12,7 @@
 (setq gc-cons-threshold most-positive-fixnum
       gc-cons-percentage 0.5)
 
-(defvar my/file-name-handler-alist file-name-handler-alist
+(defvar cm/file-name-handler-alist file-name-handler-alist
   "Original `file-name-handler-alist' value, restored after startup.")
 
 ;; Speed up startup by deferring expensive file name handlers.
@@ -22,7 +22,7 @@
           (lambda ()
             (setq gc-cons-threshold (* 1000 1000 8)
                   gc-cons-percentage 0.1
-                  file-name-handler-alist my/file-name-handler-alist)))
+                  file-name-handler-alist cm/file-name-handler-alist)))
 
 ;; Do not initialise the package manager.
 (setq package-enable-at-startup nil)
@@ -68,6 +68,8 @@
 ;; Fringes, parens, and cursor.
 (set-fringe-mode 5)
 (show-paren-mode 1)
-(setq-default cursor-type 'bar)
+(setq-default cursor-type '(bar . 3))
+(blink-cursor-mode 1)
+(setq blink-cursor-blinks 0)
 
 ;;; early-init.el ends here

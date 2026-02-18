@@ -44,7 +44,7 @@
   (load custom-file nil 'nomessage))
 
 ;;;; Local machine-specific overrides (not tracked).
-(defvar my/mouse-profile 'wheel
+(defvar cm/mouse-profile 'wheel
   "Scrolling profile for this machine. Expected values: `wheel' or `trackpad'.")
 
 (let ((local-settings-file (expand-file-name "local-settings.el" user-emacs-directory)))
@@ -57,6 +57,22 @@
   (setq backup-directory-alist `(("." . ,saves-dir))
         auto-save-file-name-transforms `((".*" ,saves-dir t))
         lock-file-directory saves-dir))
+
+;;;; Trust dir-local variables and eval blocks.
+(setq enable-local-variables :all
+      enable-local-eval t)
+
+;;;; Remove training wheels from useful commands.
+(put 'narrow-to-region 'disabled nil)
+(put 'downcase-region 'disabled nil)
+
+;;;; Don't prompt on quit — Emacs restarts just fine.
+(setq confirm-kill-emacs nil)
+
+;;;; Shell configuration — use fish where appropriate.
+(setq shell-file-name (executable-find "bash"))
+(setq-default vterm-shell "/usr/bin/fish")
+(setq-default explicit-shell-file-name "/usr/bin/fish")
 
 ;;;; Auto-revert buffers when files change on disk.
 (global-auto-revert-mode 1)
@@ -115,30 +131,30 @@
 ;;;; Theme-derived fringe contrast.
 (require 'color)
 
-(defvar my/fringe-contrast-threshold 0.08
+(defvar cm/fringe-contrast-threshold 0.08
   "HSL lightness threshold for deciding whether a background is light-ish.")
 
-(defvar my/fringe-darken-amount 24
+(defvar cm/fringe-darken-amount 24
   "Percent used to darken fringe background on light-ish themes.")
 
-(defvar my/fringe-lighten-amount 12
+(defvar cm/fringe-lighten-amount 12
   "Percent used to lighten fringe background on dark-ish themes.")
 
-(defun my/apply-complementary-fringe-background (&rest _)
+(defun cm/apply-complementary-fringe-background (&rest _)
   "Set fringe background to a contrasting shade of the default background."
   (let* ((default-bg (face-background 'default nil 'default))
          (rgb (and (stringp default-bg) (color-name-to-rgb default-bg))))
     (when rgb
       (let* ((hsl (apply #'color-rgb-to-hsl rgb))
              (lightness (nth 2 hsl))
-             (light-ish (>= lightness my/fringe-contrast-threshold))
+             (light-ish (>= lightness cm/fringe-contrast-threshold))
              (fringe-bg (if light-ish
-                            (color-darken-name default-bg my/fringe-darken-amount)
-                          (color-lighten-name default-bg my/fringe-lighten-amount))))
+                            (color-darken-name default-bg cm/fringe-darken-amount)
+                          (color-lighten-name default-bg cm/fringe-lighten-amount))))
         (set-face-attribute 'fringe nil :background fringe-bg)))))
 
-(advice-add 'load-theme :after #'my/apply-complementary-fringe-background)
-(my/apply-complementary-fringe-background)
+(advice-add 'load-theme :after #'cm/apply-complementary-fringe-background)
+(cm/apply-complementary-fringe-background)
 
 ;;;; Fonts.
 ;;(set-face-attribute 'default nil :family "TX-02" :height 130)
@@ -147,9 +163,9 @@
 (set-fontset-font t 'emoji (font-spec :family "JoyPixels") nil 'prepend)
 
 ;;;; Smooth scrolling (built-in pixel precision + horizontal wheel support).
-(defun my/apply-scrolling-profile ()
-  "Apply scrolling settings from `my/mouse-profile'."
-  (pcase my/mouse-profile
+(defun cm/apply-scrolling-profile ()
+  "Apply scrolling settings from `cm/mouse-profile'."
+  (pcase cm/mouse-profile
     ('trackpad
      (setq pixel-scroll-precision-use-momentum t
            pixel-scroll-precision-interpolate-page t
@@ -169,7 +185,7 @@
            mouse-wheel-scroll-amount-horizontal 2)))
   (pixel-scroll-precision-mode 1))
 
-(my/apply-scrolling-profile)
+(cm/apply-scrolling-profile)
 
 ;;;; which-key.
 (use-package which-key
@@ -181,6 +197,30 @@
 (global-set-key (kbd "M-s-<right>") #'windmove-right)
 (global-set-key (kbd "M-s-<up>") #'windmove-up)
 (global-set-key (kbd "M-s-<down>") #'windmove-down)
+
+;;;; Toggle window split orientation.
+(defun cm/toggle-window-split ()
+  "Toggle a two-window frame between horizontal and vertical split.
+Preserves buffer contents, scroll positions, and selection."
+  (interactive)
+  (unless (= (count-windows) 2)
+    (user-error "Can only toggle with exactly 2 windows"))
+  (let* ((win1 (selected-window))
+         (win2 (next-window win1 nil (selected-frame)))
+         (state1 (window-state-get win1))
+         (state2 (window-state-get win2))
+         (e1 (window-edges win1))
+         (e2 (window-edges win2))
+         (vertical-p (= (car e1) (car e2))))
+    (delete-other-windows win1)
+    (let ((new-win (if vertical-p
+                       (split-window-horizontally)
+                     (split-window-vertically))))
+      (window-state-put state1 (selected-window))
+      (window-state-put state2 new-win)
+      (select-window win1))))
+
+(global-set-key (kbd "C-c |") #'cm/toggle-window-split)
 
 ;;;; Word motion/deletion tuned for editor-like chunk behavior.
 (defun cm/relevant-match-syntax (in)
@@ -262,6 +302,24 @@
 (global-set-key (kbd "C-M-;") #'backward-sexp)
 (global-set-key (kbd "M-d") #'duplicate-dwim)
 
+;;;; Function-key bindings.
+(global-set-key (kbd "<f2>") #'browse-url)
+(global-set-key (kbd "<f3>") #'kmacro-start-macro)
+(global-set-key (kbd "S-<f3>") #'kmacro-end-macro)
+(global-set-key (kbd "<f4>") #'kmacro-end-and-call-macro)
+(global-set-key (kbd "<f5>") #'project-compile)
+(global-set-key (kbd "<f9>") #'next-error)
+(global-set-key (kbd "<f10>") #'previous-error)
+
+(defun cm/format-buffer ()
+  "Organize imports (if available) and format via eglot."
+  (interactive)
+  (cm/eglot-organize-imports)
+  (ignore-errors (eglot-format))
+  (message "... formatted"))
+
+(global-set-key (kbd "<f12>") #'cm/format-buffer)
+
 ;;;; Vertico — vertical minibuffer completion UI.
 (use-package vertico
   :init
@@ -328,68 +386,68 @@
   (vertico-prescient-mode 1))
 
 ;;;; Consult seed helpers.
-(defvar my/consult-region-max-chars 180
+(defvar cm/consult-region-max-chars 180
   "Maximum region size used to seed Consult input.")
 
-(defun my/consult-region-seed ()
+(defun cm/consult-region-seed ()
   "Return a normalized active-region seed for Consult, or nil.
 Seeding is skipped for multi-line or very large regions."
   (when (use-region-p)
     (let* ((raw (buffer-substring-no-properties (region-beginning) (region-end)))
            (text (string-trim raw)))
       (when (and (> (length text) 0)
-                 (<= (length text) my/consult-region-max-chars)
+                 (<= (length text) cm/consult-region-max-chars)
                  (not (string-match-p "\n" text)))
         text))))
 
-(defun my/consult-line-dwim ()
+(defun cm/consult-line-dwim ()
   "Run `consult-line' seeded from region when appropriate."
   (interactive)
-  (consult-line (my/consult-region-seed)))
+  (consult-line (cm/consult-region-seed)))
 
-(defun my/consult-git-grep-dwim ()
+(defun cm/consult-git-grep-dwim ()
   "Run `consult-git-grep' seeded from region when appropriate."
   (interactive)
-  (consult-git-grep nil (my/consult-region-seed)))
+  (consult-git-grep nil (cm/consult-region-seed)))
 
-(defun my/consult-ripgrep-dwim ()
+(defun cm/consult-ripgrep-dwim ()
   "Run `consult-ripgrep' seeded from region when appropriate."
   (interactive)
-  (consult-ripgrep nil (my/consult-region-seed)))
+  (consult-ripgrep nil (cm/consult-region-seed)))
 
-(defun my/consult-find-dwim ()
+(defun cm/consult-find-dwim ()
   "Run `consult-find' seeded from region when appropriate."
   (interactive)
-  (consult-find nil (my/consult-region-seed)))
+  (consult-find nil (cm/consult-region-seed)))
 
-(defun my/thing-at-point-seed ()
+(defun cm/thing-at-point-seed ()
   "Return symbol-at-point, falling back to word-at-point, or nil."
   (or (thing-at-point 'symbol t)
       (thing-at-point 'word t)))
 
-(defun my/project-root-or-default ()
+(defun cm/project-root-or-default ()
   "Return current project root when available, else `default-directory'."
   (if-let* ((project (project-current nil)))
       (project-root project)
     default-directory))
 
-(defun my/consult-ripgrep-thing-at-point-literal ()
+(defun cm/consult-ripgrep-thing-at-point-literal ()
   "Run `consult-ripgrep' using thing-at-point as a literal pattern."
   (interactive)
-  (let ((thing (my/thing-at-point-seed)))
+  (let ((thing (cm/thing-at-point-seed)))
     (consult-ripgrep nil (and thing (regexp-quote thing)))))
 
-(defun my/consult-ripgrep-thing-at-point-regexp ()
+(defun cm/consult-ripgrep-thing-at-point-regexp ()
   "Run `consult-ripgrep' using thing-at-point as a regexp pattern."
   (interactive)
-  (consult-ripgrep nil (my/thing-at-point-seed)))
+  (consult-ripgrep nil (cm/thing-at-point-seed)))
 
-(defun my/consult-ripgrep-sql-thing-at-point-literal ()
+(defun cm/consult-ripgrep-sql-thing-at-point-literal ()
   "Search SQL files in the project using thing-at-point as literal input."
   (interactive)
-  (let* ((thing (my/thing-at-point-seed))
+  (let* ((thing (cm/thing-at-point-seed))
          (initial (and thing (regexp-quote thing)))
-         (root (my/project-root-or-default))
+         (root (cm/project-root-or-default))
          (consult-ripgrep-args
           (concat consult-ripgrep-args " --glob=*.sql --glob=*.psql")))
     (consult-ripgrep root initial)))
@@ -400,7 +458,7 @@ Seeding is skipped for multi-line or very large regions."
   (xref-show-xrefs-function #'consult-xref)
   (xref-show-definitions-function #'consult-xref)
   :bind
-  (("C-S-s"   . my/consult-line-dwim)
+  (("C-S-s"   . cm/consult-line-dwim)
    ("C-x b"   . consult-buffer)
    ("C-x p b" . consult-project-buffer)
    ("C-x C-r" . consult-recent-file)
@@ -410,13 +468,13 @@ Seeding is skipped for multi-line or very large regions."
    ("M-g e"   . consult-compile-error)
    ("M-g i"   . consult-imenu)
    ("C-c h"   . consult-history)
-   ("C-c s"   . my/consult-ripgrep-dwim)
-   ("M-s ."   . my/consult-ripgrep-thing-at-point-literal)
-   ("M-s ,"   . my/consult-ripgrep-thing-at-point-regexp)
-   ("M-s q"   . my/consult-ripgrep-sql-thing-at-point-literal)
-   ("M-s g"   . my/consult-git-grep-dwim)
-   ("M-s r"   . my/consult-ripgrep-dwim)
-   ("M-s f"   . my/consult-find-dwim)
+   ("C-c s"   . cm/consult-ripgrep-dwim)
+   ("M-s ."   . cm/consult-ripgrep-thing-at-point-literal)
+   ("M-s ,"   . cm/consult-ripgrep-thing-at-point-regexp)
+   ("M-s q"   . cm/consult-ripgrep-sql-thing-at-point-literal)
+   ("M-s g"   . cm/consult-git-grep-dwim)
+   ("M-s r"   . cm/consult-ripgrep-dwim)
+   ("M-s f"   . cm/consult-find-dwim)
    ("M-y"     . consult-yank-pop)))
 
 ;;;; Embark — contextual actions in minibuffer and buffers.
@@ -483,13 +541,13 @@ Seeding is skipped for multi-line or very large regions."
   (("M-+" . tempel-complete)
    ("M-*" . tempel-insert))
   :init
-  (defun my/tempel-setup-capf ()
+  (defun cm/tempel-setup-capf ()
     "Add Tempel completion to the front of local CAPF list."
     (setq-local completion-at-point-functions
                 (cons #'tempel-complete completion-at-point-functions)))
   :hook
-  ((prog-mode . my/tempel-setup-capf)
-   (text-mode . my/tempel-setup-capf)))
+  ((prog-mode . cm/tempel-setup-capf)
+   (text-mode . cm/tempel-setup-capf)))
 
 (use-package tempel-collection
   :after tempel)
@@ -535,7 +593,7 @@ Seeding is skipped for multi-line or very large regions."
   ([remap describe-command]  . helpful-command))
 
 ;;;; Popper — popup buffer management.
-(defun my/popper-group-by-project-or-directory ()
+(defun cm/popper-group-by-project-or-directory ()
   "Group popups by project when available, otherwise by directory."
   (condition-case nil
       (popper-group-by-project)
@@ -547,7 +605,7 @@ Seeding is skipped for multi-line or very large regions."
    ("M-`"   . popper-cycle)
    ("C-M-`" . popper-toggle-type))
   :custom
-  (popper-group-function #'my/popper-group-by-project-or-directory)
+  (popper-group-function #'cm/popper-group-by-project-or-directory)
   (popper-reference-buffers
    '("\\*Messages\\*"
      "\\*Warnings\\*"
@@ -618,8 +676,18 @@ Seeding is skipped for multi-line or very large regions."
   :init
   (doom-modeline-mode))
 
+;;;; nav-flash — briefly highlight the cursor line after large motions.
+(use-package nav-flash
+  :hook
+  ((imenu-after-jump . nav-flash-show)
+   (better-jumper-post-jump . nav-flash-show)
+   (xref-after-return . nav-flash-show)
+   (xref-after-jump . nav-flash-show))
+  :config
+  (advice-add 'recenter :after (lambda (&rest _) (nav-flash-show))))
+
 ;;;; Tree-sitter — automatic grammar installation and mode remapping.
-(defun my/sanitize-auto-mode-alist ()
+(defun cm/sanitize-auto-mode-alist ()
   "Remove invalid `auto-mode-alist' entries introduced by third-party code.
 Valid entries must have a regexp string as their car."
   (setq auto-mode-alist
@@ -635,7 +703,7 @@ Valid entries must have a regexp string as their car."
   :config
   (treesit-auto-add-to-auto-mode-alist 'all)
   (global-treesit-auto-mode)
-  (my/sanitize-auto-mode-alist))
+  (cm/sanitize-auto-mode-alist))
 
 ;;;; yasnippet — snippet expansion (used by eglot for LSP snippets).
 (use-package yasnippet
@@ -659,12 +727,12 @@ Valid entries must have a regexp string as their car."
 ;; 3) In sql-mode, keep custom SQL reference commands on `M-?' / `C-c ? s'.
 ;;    (Those commands are explicit and separate from xref backend plumbing.)
 
-(defun my/xref-union-disable-in-eglot-managed-buffer ()
+(defun cm/xref-union-disable-in-eglot-managed-buffer ()
   "Disable `xref-union-mode' when Eglot manages the current buffer."
   (when (bound-and-true-p xref-union-mode)
     (xref-union-mode -1)))
 
-(defun my/xref-union-excluded-backend-p (backend-fn)
+(defun cm/xref-union-excluded-backend-p (backend-fn)
   "Return non-nil when BACKEND-FN should be excluded from xref-union."
   (or (eq backend-fn #'etags--xref-backend)
       ;; In LSP-managed buffers, avoid dumb-jump/rg shadowing Eglot xref.
@@ -706,7 +774,7 @@ Valid entries must have a regexp string as their car."
               ("C-c e o" . eglot-code-action-organize-imports))
   :config
   (add-hook 'eglot-managed-mode-hook
-            #'my/xref-union-disable-in-eglot-managed-buffer)
+            #'cm/xref-union-disable-in-eglot-managed-buffer)
   (add-to-list 'eglot-server-programs '(odin-mode . ("ols")))
   (add-to-list 'eglot-server-programs '(zig-mode . ("zls")))
   (add-to-list 'eglot-server-programs '(templ-ts-mode . ("templ" "lsp")))
@@ -734,7 +802,7 @@ Valid entries must have a regexp string as their car."
 ;;;; xref-union — combine xref backends (Eglot + dumb-jump fallback).
 (use-package xref-union
   :custom
-  (xref-union-excluded-backends #'my/xref-union-excluded-backend-p)
+  (xref-union-excluded-backends #'cm/xref-union-excluded-backend-p)
   :hook
   ((prog-mode . xref-union-mode)
    (sql-mode . xref-union-mode)))
@@ -777,12 +845,6 @@ Valid entries must have a regexp string as their car."
    ("C-c d p" . cm/dape-go-debug-package-tests)))
 
 ;;;; Go Dape wrappers.
-(defun cm/project-root-or-default ()
-  "Return project root if available, otherwise `default-directory'."
-  (if-let* ((project (project-current nil)))
-      (project-root project)
-    default-directory))
-
 (defun cm/go-test-name-at-point ()
   "Return enclosing Go test name like `TestFoo', or nil."
   (save-excursion
@@ -864,10 +926,18 @@ Valid entries must have a regexp string as their car."
 ;; go-ts-mode and go-mod-ts-mode are built-in; gopls is eglot's default.
 (setq go-ts-mode-indent-offset 4)
 
+(defun cm/eglot-organize-imports ()
+  "Run gopls organize-imports code action via eglot, if available."
+  (when (eglot-managed-p)
+    (condition-case nil
+        (eglot-code-action-organize-imports (point-min) (point-max))
+      (t nil))))
+
 (add-hook 'go-ts-mode-hook
           (lambda ()
             (setq-local tab-width 4)
             (setq-local indent-tabs-mode t)
+            (add-hook 'before-save-hook #'cm/eglot-organize-imports nil t)
             (add-hook 'before-save-hook #'eglot-format nil t)))
 
 (use-package gotest
@@ -1188,48 +1258,48 @@ With prefix argument REFRESH, rebuild completion cache first."
   :hook
   ((org-mode . visual-line-mode)
    (org-mode . org-indent-mode)
-   (org-mode . my/org-apply-heading-scale)))
+   (org-mode . cm/org-apply-heading-scale)))
 
 ;;;; org heading sizing.
-(defvar my/org-heading-scale-factor 1.2
+(defvar cm/org-heading-scale-factor 1.2
   "Multiplier used to enlarge org heading faces.")
 
-(defvar my/org-heading-base-heights nil
+(defvar cm/org-heading-base-heights nil
   "Original org heading heights captured from the active theme.")
 
-(defun my/org-heading-faces-ready-p (faces)
+(defun cm/org-heading-faces-ready-p (faces)
   "Return non-nil when every face in FACES has been defined."
   (catch 'missing
     (dolist (face faces t)
       (unless (facep face)
         (throw 'missing nil)))))
 
-(defun my/org-apply-heading-scale ()
-  "Scale `org-level-*' faces by `my/org-heading-scale-factor'."
+(defun cm/org-apply-heading-scale ()
+  "Scale `org-level-*' faces by `cm/org-heading-scale-factor'."
   (let ((faces '(org-level-1 org-level-2 org-level-3 org-level-4
                              org-level-5 org-level-6 org-level-7 org-level-8)))
-    (when (my/org-heading-faces-ready-p faces)
-      (unless my/org-heading-base-heights
-        (setq my/org-heading-base-heights
+    (when (cm/org-heading-faces-ready-p faces)
+      (unless cm/org-heading-base-heights
+        (setq cm/org-heading-base-heights
               (mapcar (lambda (face)
                         (cons face (face-attribute face :height nil 'default)))
                       faces)))
-      (dolist (entry my/org-heading-base-heights)
+      (dolist (entry cm/org-heading-base-heights)
         (let ((face (car entry))
               (height (cdr entry)))
           (when (numberp height)
             (set-face-attribute
              face nil :height
              (truncate (* (if (integerp height) height (* 100 height))
-                          my/org-heading-scale-factor)))))))))
+                          cm/org-heading-scale-factor)))))))))
 
-(defun my/org-refresh-heading-scale (&rest _)
+(defun cm/org-refresh-heading-scale (&rest _)
   "Recompute and apply org heading scale after theme changes."
-  (setq my/org-heading-base-heights nil)
-  (my/org-apply-heading-scale))
+  (setq cm/org-heading-base-heights nil)
+  (cm/org-apply-heading-scale))
 
-(advice-add 'load-theme :after #'my/org-refresh-heading-scale)
-(my/org-apply-heading-scale)
+(advice-add 'load-theme :after #'cm/org-refresh-heading-scale)
+(cm/org-apply-heading-scale)
 
 (setq shift-select-mode 'permanent)
 

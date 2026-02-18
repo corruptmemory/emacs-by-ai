@@ -27,15 +27,44 @@ On first launch, `straight.el` bootstraps itself and installs all packages. Tree
 
 ## Completion stack
 
-Vertico + Orderless + Consult + Marginalia + Embark in the minibuffer; Corfu + Cape + kind-icon in-buffer.
+Vertico + Orderless + Consult + Marginalia + Embark in the minibuffer; Corfu + Cape + kind-icon in-buffer. Prescient provides frequency/recency sorting for Vertico.
 
 ## LSP
 
-Eglot (built-in) with eglot-booster for performance. Hooks are wired for 20+ language modes. Custom LSP server entries for Odin (`ols`), Zig (`zls`), Jai (`jails`), go-templ, GLSL, Fish, and Haskell.
+Eglot (built-in) with eglot-booster for performance. Hooks are wired for 20+ language modes. Custom LSP server entries for Odin (`ols`), Zig (`zls`), Jai (`jails`), go-templ, GLSL, Fish, and Haskell. xref-union combines Eglot's xref backend with dumb-jump as a fallback in non-LSP buffers.
 
 ## Debugging
 
-Dape (DAP client) with custom Go/Delve wrappers for debugging tests, main, and package tests.
+Dape (DAP client) with custom Go/Delve wrappers for debugging tests (`cm/dape-go-debug-test-at-point`), main (`cm/dape-go-debug-main`), and package tests (`cm/dape-go-debug-package-tests`).
+
+## Navigation
+
+- **Avy** — fast jump-to-char/word/line (`M-j`, `M-g w`, `M-g e`)
+- **Ace-window** — quick window switching (`M-o`)
+- **Windmove** — directional window navigation (`M-s-<arrow>`)
+- **nav-flash** — briefly highlights cursor line after large jumps (xref, imenu, recenter)
+
+## Custom editing commands
+
+Chunk-based word motion and deletion (`cm/move-right`, `cm/move-left`, `cm/backward-delete-word`, `cm/delete-word`) bound to `C-<arrow>` and `C-<backspace>`/`C-<delete>`. Line transposition via `cm/move-line-up`/`cm/move-line-down` on `M-<up>`/`M-<down>`. Toggle window split orientation with `cm/toggle-window-split` (`C-c |`).
+
+## Function keys
+
+| Key | Action |
+|-----|--------|
+| `<f2>` | `browse-url` |
+| `<f3>` / `S-<f3>` / `<f4>` | Start / stop / play keyboard macro |
+| `<f5>` | `project-compile` |
+| `<f9>` / `<f10>` | Next / previous error |
+| `<f12>` | Organize imports + format buffer (eglot) |
+
+## SQL tooling
+
+Custom xref-based cross-project reference search for SQL identifiers:
+- `cm/sql-find-references` (`M-?`) — search all project files for SQL object references
+- `cm/sql-find-references-sql-only` (`C-c ? s`) — search SQL files only
+- `cm/sql-complete-object` (`C-c C-o`) — complete SQL object names from live SQLi connection
+- `cm/sql-refresh-completions` (`C-c C-l r`) — rebuild completion cache
 
 ## Fonts
 
@@ -45,12 +74,16 @@ Dape (DAP client) with custom Go/Delve wrappers for debugging tests, main, and p
 
 Run `M-x all-the-icons-install-fonts` once after first install for icon support.
 
+## Naming conventions
+
+- `cm/` prefix — all custom functions and variables (`cm` = corruptmemory)
+
 ## External tool dependencies
 
 | Tool                              | Used by                                           |
 |-----------------------------------|---------------------------------------------------|
 | `ripgrep` (`rg`)                  | consult-ripgrep, deadgrep, dumb-jump              |
-| `emacs-lsp-booster`               | eglot-booster (`cargo install emacs-lsp-booster`) |
+| `emacs-lsp-booster`              | eglot-booster (`cargo install emacs-lsp-booster`) |
 | `gopls`                           | Go LSP                                            |
 | `rust-analyzer`                   | Rust LSP                                          |
 | `clangd`                          | C/C++ LSP                                         |

@@ -10,6 +10,9 @@ eln-cache/
 # Tree-sitter compiled grammars
 tree-sitter/
 
+# Multiple-cursors state
+.mc-lists.el
+
 # Session state files
 auto-save-list/
 saves/

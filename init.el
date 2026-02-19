@@ -617,25 +617,13 @@ Seeding is skipped for multi-line or very large regions."
   (require 'smartparens-config))
 
 ;;;; Spell checking — flyspell in text-like modes only.
+;;; Use F6 to run flyspell-buffer on demand.
 (use-package flyspell
   :straight nil
   :hook
   ((text-mode . flyspell-mode)
    (org-mode . flyspell-mode)
-   (markdown-mode . flyspell-mode))
-  :config
-  (defun cm/flyspell-buffer-after-enable ()
-    "Spell-check visible region shortly after flyspell starts."
-    (when flyspell-mode
-      (run-with-idle-timer
-       0.5 nil
-       (lambda (buf)
-         (when (buffer-live-p buf)
-           (with-current-buffer buf
-             (when flyspell-mode
-               (flyspell-region (window-start) (window-end))))))
-       (current-buffer))))
-  (add-hook 'flyspell-mode-hook #'cm/flyspell-buffer-after-enable))
+   (markdown-mode . flyspell-mode)))
 
 ;;;; Magit — Git interface.
 (use-package magit

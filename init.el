@@ -186,6 +186,7 @@
            pixel-scroll-precision-interpolate-mice nil
            mouse-wheel-progressive-speed nil
            mouse-wheel-tilt-scroll t
+           mouse-wheel-flip-direction nil
            mouse-wheel-scroll-amount '(1 ((shift) . hscroll))
            mouse-wheel-scroll-amount-horizontal 2)))
   (pixel-scroll-precision-mode 1))
@@ -235,6 +236,13 @@ Preserves buffer contents, scroll positions, and selection."
 (define-key cm/toggles-map (kbd "t") #'toggle-truncate-lines)
 (define-key cm/toggles-map (kbd "s") #'whitespace-mode)
 (define-key cm/toggles-map (kbd "f") #'flyspell-mode)
+(defun cm/toggle-scrolling-profile ()
+  "Toggle `cm/mouse-profile' between `trackpad' and `wheel' and re-apply."
+  (interactive)
+  (setq cm/mouse-profile (if (eq cm/mouse-profile 'trackpad) 'wheel 'trackpad))
+  (cm/apply-scrolling-profile)
+  (message "Scrolling profile: %s" cm/mouse-profile))
+(define-key cm/toggles-map (kbd "m") #'cm/toggle-scrolling-profile)
 
 ;;;; Word motion/deletion tuned for editor-like chunk behavior.
 (defun cm/relevant-match-syntax (in)

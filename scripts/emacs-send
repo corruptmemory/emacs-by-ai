@@ -2,10 +2,11 @@
 # emacs-send — send commands to a running Emacs instance.
 #
 # Usage:
-#   emacs-send <file>            Open file in the "right" Emacs
+#   emacs-send <file> ...         Open file(s) in the "right" Emacs
 #   emacs-send -e '(expr)'       Eval arbitrary elisp
-#   emacs-send -m <file>         Choose target via Rofi menu
+#   emacs-send -m <file> ...     Choose target via Rofi menu
 #   emacs-send -m -e '(expr)'    Choose target via Rofi, then eval
+#   emacs-send -h | --help        Show usage help
 #   emacs-send --install          Symlink this script into ~/.local/bin
 #
 # Selection logic:
@@ -24,6 +25,29 @@ INSTALL_NAME="emacs-send"
 # --- helpers ---
 
 die() { echo "emacs-send: $*" >&2; exit 1; }
+
+usage() {
+    cat <<'HELP'
+emacs-send — send commands to a running Emacs instance.
+
+Usage:
+  emacs-send <file> ...          Open file(s) in the "right" Emacs
+  emacs-send -e '(expr)'         Eval arbitrary elisp
+  emacs-send -m <file> ...        Choose target via Rofi menu
+  emacs-send -m -e '(expr)'      Choose target via Rofi, then eval
+  emacs-send --install            Symlink this script into ~/.local/bin
+  emacs-send -h | --help          Show this help
+
+Selection logic:
+  1. -m flag         → always show Rofi picker
+  2. One instance    → use it directly
+  3. Multiple        → read ~/.emacs-last-used
+  4. Stale/missing   → fall back to Rofi
+
+Requires per-instance server-start in your Emacs init (server-name = "emacs-<PID>").
+HELP
+    exit 0
+}
 
 do_install() {
     mkdir -p "$INSTALL_DIR"
@@ -115,6 +139,7 @@ FILES=()
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        -h|--help) usage ;;
         --install) do_install ;;
         -m) USE_ROFI=true; shift ;;
         -e) EVAL_MODE=true; EXPR="$2"; shift 2 ;;

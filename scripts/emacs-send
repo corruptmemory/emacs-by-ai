@@ -1,0 +1,172 @@
+#!/usr/bin/env bash
+# emacs-send — send commands to a running Emacs instance.
+#
+# Usage:
+#   emacs-send <file>            Open file in the "right" Emacs
+#   emacs-send -e '(expr)'       Eval arbitrary elisp
+#   emacs-send -m <file>         Choose target via Rofi menu
+#   emacs-send -m -e '(expr)'    Choose target via Rofi, then eval
+#   emacs-send --install          Symlink this script into ~/.local/bin
+#
+# Selection logic:
+#   1. -m flag → always show Rofi picker
+#   2. Only one Emacs → use it directly
+#   3. Multiple → read ~/.emacs-last-used
+#   4. Last-used stale/missing → fall back to Rofi
+
+set -euo pipefail
+
+LAST_USED_FILE="$HOME/.emacs-last-used"
+SCRIPT_PATH="$(realpath "$0")"
+INSTALL_DIR="$HOME/.local/bin"
+INSTALL_NAME="emacs-send"
+
+# --- helpers ---
+
+die() { echo "emacs-send: $*" >&2; exit 1; }
+
+do_install() {
+    mkdir -p "$INSTALL_DIR"
+    local link="$INSTALL_DIR/$INSTALL_NAME"
+    if [[ -L "$link" ]]; then
+        local existing
+        existing=$(realpath "$link")
+        if [[ "$existing" == "$SCRIPT_PATH" ]]; then
+            echo "Already installed: $link -> $SCRIPT_PATH"
+            exit 0
+        fi
+        rm "$link"
+    elif [[ -e "$link" ]]; then
+        die "$link exists and is not a symlink; remove it manually"
+    fi
+    ln -s "$SCRIPT_PATH" "$link"
+    echo "Installed: $link -> $SCRIPT_PATH"
+    exit 0
+}
+
+# Find the server socket directory.
+find_socket_dir() {
+    local uid
+    uid=$(id -u)
+    for dir in "/run/user/$uid/emacs" "/tmp/emacs$uid"; do
+        if [[ -d "$dir" ]]; then
+            echo "$dir"
+            return
+        fi
+    done
+    return 1
+}
+
+# List live server names (only those with a running Emacs process).
+live_servers() {
+    local socket_dir
+    socket_dir=$(find_socket_dir) || return 1
+    for sock in "$socket_dir"/emacs-*; do
+        [[ -e "$sock" ]] || continue
+        local name pid
+        name=$(basename "$sock")
+        pid=${name#emacs-}
+        # Verify the PID is still an Emacs process.
+        if kill -0 "$pid" 2>/dev/null; then
+            echo "$name"
+        fi
+    done
+}
+
+# Query an Emacs instance for its current buffer name.
+buffer_name_for() {
+    local srv="$1"
+    emacsclient -s "$srv" -e '(buffer-name (window-buffer (selected-window)))' 2>/dev/null | tr -d '"'
+}
+
+# Show Rofi picker. Returns chosen server name.
+rofi_pick() {
+    local servers=("$@")
+    local entries=()
+
+    for srv in "${servers[@]}"; do
+        local pid=${srv#emacs-}
+        local buf
+        buf=$(buffer_name_for "$srv")
+        entries+=("$buf  (PID $pid)|$srv")
+    done
+
+    local display
+    display=$(printf '%s\n' "${entries[@]}" | cut -d'|' -f1)
+
+    local chosen
+    chosen=$(echo "$display" | rofi -dmenu -i -p "Emacs" -no-custom) || exit 0
+
+    # Map the display line back to the server name.
+    for entry in "${entries[@]}"; do
+        if [[ "${entry%%|*}" == "$chosen" ]]; then
+            echo "${entry##*|}"
+            return
+        fi
+    done
+}
+
+# --- argument parsing ---
+
+USE_ROFI=false
+EVAL_MODE=false
+EXPR=""
+FILES=()
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --install) do_install ;;
+        -m) USE_ROFI=true; shift ;;
+        -e) EVAL_MODE=true; EXPR="$2"; shift 2 ;;
+        *)  FILES+=("$1"); shift ;;
+    esac
+done
+
+if ! $EVAL_MODE && [[ ${#FILES[@]} -eq 0 ]]; then
+    die "usage: emacs-send [-m] [-e '(expr)' | <file> ...] [--install]"
+fi
+
+# --- resolve target server ---
+
+mapfile -t servers < <(live_servers)
+
+if [[ ${#servers[@]} -eq 0 ]]; then
+    die "no running Emacs instances found"
+fi
+
+if $USE_ROFI; then
+    command -v rofi >/dev/null 2>&1 || die "rofi is not installed"
+    target=$(rofi_pick "${servers[@]}")
+elif [[ ${#servers[@]} -eq 1 ]]; then
+    target="${servers[0]}"
+elif [[ -f "$LAST_USED_FILE" ]]; then
+    candidate=$(cat "$LAST_USED_FILE")
+    # Verify it's still alive.
+    target=""
+    for srv in "${servers[@]}"; do
+        if [[ "$srv" == "$candidate" ]]; then
+            target="$srv"
+            break
+        fi
+    done
+    if [[ -z "$target" ]]; then
+        # Last-used is stale, fall back to Rofi.
+        command -v rofi >/dev/null 2>&1 || die "multiple instances running and last-used is stale; install rofi or use -m"
+        target=$(rofi_pick "${servers[@]}")
+    fi
+else
+    command -v rofi >/dev/null 2>&1 || die "multiple instances running; install rofi or use -m"
+    target=$(rofi_pick "${servers[@]}")
+fi
+
+[[ -n "$target" ]] || die "no target selected"
+
+# --- send command ---
+
+if $EVAL_MODE; then
+    emacsclient -s "$target" -e "$EXPR"
+else
+    for f in "${FILES[@]}"; do
+        emacsclient -s "$target" -n "$(realpath "$f")"
+    done
+fi

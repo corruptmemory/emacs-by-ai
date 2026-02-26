@@ -16,13 +16,14 @@ emacs --init-directory=~/projects/emacs-again/
 - `init.el` — Package management (straight.el + use-package), all packages, keybindings, language configs
 - `themes/` — Custom color themes (Dracula Pro Blade/Pro, Naysayer)
 - `local-settings.el` — Machine-specific overrides (git-ignored); sets `cm/mouse-profile` etc.
+- `scripts/emacs-send` — Shell script for sending files/commands to a running Emacs instance (self-installs via `--install`)
 
 ## Architecture of init.el
 
 The file is organized in this order:
 
 1. **Startup/bootstrap** — timing display, straight.el bootstrap, use-package integration
-2. **Core settings** — custom file, local overrides, backups, auto-revert, delete-selection, electric-indent, tabs, recentf, saveplace
+2. **Core settings** — custom file, local overrides, backups, auto-revert, delete-selection, electric-indent, tabs, recentf, saveplace, per-instance server
 3. **PATH** — adds ~/.cargo/bin, ~/.local/bin, ~/go/bin, ~/projects/Odin, ~/projects/ols to exec-path
 4. **Theme and fonts** — loads dracula-pro-blade, sets TX-02/Fira Sans/JoyPixels, auto-adjusts fringe contrast
 5. **Scrolling** — pixel-scroll-precision-mode with wheel/trackpad profiles driven by `cm/mouse-profile`; trackpad flips horizontal scroll and disables interpolated page scroll for instant PgUp/PgDn

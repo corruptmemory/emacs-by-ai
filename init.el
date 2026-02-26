@@ -113,6 +113,23 @@
   :init
   (save-place-mode 1))
 
+;;;; Per-instance server for external scripting (not daemon mode).
+;; Each Emacs gets a unique server name based on its PID so external
+;; scripts can target a specific instance via emacsclient -s <name>.
+(use-package server
+  :straight nil
+  :config
+  (setq server-name (format "emacs-%d" (emacs-pid)))
+  (unless (server-running-p)
+    (server-start))
+  (defvar cm/last-used-file (expand-file-name "~/.emacs-last-used")
+    "File recording the server-name of the most recently focused Emacs.")
+  (defun cm/record-last-used-emacs ()
+    "Write current `server-name' to `cm/last-used-file' on focus."
+    (with-temp-file cm/last-used-file
+      (insert server-name)))
+  (add-hook 'focus-in-hook #'cm/record-last-used-emacs))
+
 ;;;; PATH configuration.
 (dolist (dir '("~/.cargo/bin"
                "~/.local/bin"

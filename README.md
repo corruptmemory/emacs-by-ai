@@ -20,6 +20,7 @@ On first launch, `straight.el` bootstraps itself and installs all packages. Tree
 | `snippets/`         | User-defined yasnippet/tempel snippets                                  |
 | `local-settings.el` | Machine-specific overrides (git-ignored)                                |
 | `custom.el`         | Emacs customize output (git-ignored)                                    |
+| `scripts/emacs-send`| Send files/commands to a running Emacs (`--install` to symlink)         |
 
 ## Package management
 

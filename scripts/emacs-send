@@ -10,12 +10,16 @@
 #   emacs-send --install          Symlink this script into ~/.local/bin
 #
 # Selection logic:
-#   1. -m flag → always show Rofi picker
-#   2. Only one Emacs → use it directly
-#   3. Multiple → read ~/.emacs-last-used
-#   4. Last-used stale/missing → fall back to Rofi
+#   1. No Emacs running → start one automatically
+#   2. -m flag → always show Rofi picker
+#   3. Only one Emacs → use it directly
+#   4. Multiple → read ~/.emacs-last-used
+#   5. Last-used stale/missing → fall back to Rofi
 
 set -euo pipefail
+
+# Prevent emacsclient from spawning rogue Emacs instances on failure.
+unset ALTERNATE_EDITOR
 
 LAST_USED_FILE="$HOME/.emacs-last-used"
 SCRIPT_PATH="$(realpath "$0")"
@@ -39,10 +43,11 @@ Usage:
   emacs-send -h | --help          Show this help
 
 Selection logic:
-  1. -m flag         → always show Rofi picker
-  2. One instance    → use it directly
-  3. Multiple        → read ~/.emacs-last-used
-  4. Stale/missing   → fall back to Rofi
+  1. No Emacs running → start one automatically
+  2. -m flag          → always show Rofi picker
+  3. One instance     → use it directly
+  4. Multiple         → read ~/.emacs-last-used
+  5. Stale/missing    → fall back to Rofi
 
 Requires per-instance server-start in your Emacs init (server-name = "emacs-<PID>").
 HELP
@@ -130,6 +135,23 @@ rofi_pick() {
     done
 }
 
+# No Emacs running — launch directly with files or elisp, no server needed.
+launch_emacs_with_files() {
+    echo "Starting Emacs..." >&2
+    local -a args=()
+    for f in "$@"; do
+        args+=("$(realpath "$f")")
+    done
+    emacs "${args[@]}" &
+    exit 0
+}
+
+launch_emacs_with_elisp() {
+    echo "Starting Emacs..." >&2
+    emacs --eval "$1" &
+    exit 0
+}
+
 # --- argument parsing ---
 
 USE_ROFI=false
@@ -156,10 +178,12 @@ fi
 mapfile -t servers < <(live_servers)
 
 if [[ ${#servers[@]} -eq 0 ]]; then
-    die "no running Emacs instances found"
-fi
-
-if $USE_ROFI; then
+    if $EVAL_MODE; then
+        launch_emacs_with_elisp "$EXPR"
+    else
+        launch_emacs_with_files "${FILES[@]}"
+    fi
+elif $USE_ROFI; then
     command -v rofi >/dev/null 2>&1 || die "rofi is not installed"
     target=$(rofi_pick "${servers[@]}")
 elif [[ ${#servers[@]} -eq 1 ]]; then

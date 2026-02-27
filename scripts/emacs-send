@@ -87,6 +87,7 @@ find_socket_dir() {
 }
 
 # List live server names (only those with a running Emacs process).
+# Removes stale sockets for dead PIDs as a side effect.
 live_servers() {
     local socket_dir
     socket_dir=$(find_socket_dir) || return 1
@@ -95,9 +96,11 @@ live_servers() {
         local name pid
         name=$(basename "$sock")
         pid=${name#emacs-}
-        # Verify the PID is still an Emacs process.
         if kill -0 "$pid" 2>/dev/null; then
             echo "$name"
+        else
+            # Stale socket for a dead process — clean it up.
+            rm -f "$sock"
         fi
     done
 }

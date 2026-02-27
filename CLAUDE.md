@@ -23,7 +23,7 @@ emacs --init-directory=~/projects/emacs-again/
 The file is organized in this order:
 
 1. **Startup/bootstrap** — timing display, straight.el bootstrap, use-package integration
-2. **Core settings** — custom file, local overrides, backups, auto-revert, delete-selection, electric-indent, tabs, recentf, saveplace, per-instance server
+2. **Core settings** — custom file, local overrides, backups, auto-revert, delete-selection, electric-indent, tabs, recentf, saveplace, per-instance server (PID-named, stale socket cleanup)
 3. **PATH** — adds ~/.cargo/bin, ~/.local/bin, ~/go/bin, ~/projects/Odin, ~/projects/ols to exec-path
 4. **Theme and fonts** — loads dracula-pro-blade, sets TX-02/Fira Sans/JoyPixels, auto-adjusts fringe contrast
 5. **Scrolling** — pixel-scroll-precision-mode with wheel/trackpad profiles driven by `cm/mouse-profile`; trackpad flips horizontal scroll and disables interpolated page scroll for instant PgUp/PgDn
@@ -36,7 +36,7 @@ The file is organized in this order:
 12. **Popup/buffer management** — Popper with project-based grouping, helpful, vterm
 13. **Dev tooling** — treesit-auto, yasnippet, eglot (20+ language hooks, autoreconnect, harper-ls for writing modes), eglot-booster, consult-eglot, eldoc-box, flymake, dape (DAP)
 14. **Language configs** — Go (format-on-save, gotest, dape/Delve wrappers with auto-breakpoint), SQL (xref helpers, completion), docker, pdf-tools, then all other languages
-15. **AI writing assistant** — `cm/ai-*` exchange protocol for Claude Code integration (`C-c a` prefix), shared via `~/.emacs-ai/`
+15. **AI writing assistant** — `cm/ai-*` exchange protocol for Claude Code integration (`C-c a` prefix), shared via `~/.emacs-ai/`, interactive `*ai-suggestions*` review buffer (`C-c a S`)
 
 ## Naming Conventions
 
@@ -56,9 +56,10 @@ File-based exchange protocol at `~/.emacs-ai/` for interactive writing feedback:
 - `cm/ai-share` (`C-c a s`) — snapshots buffer, region, or org subtree (C-u) to `content.txt` + `context.json`
 - `cm/ai-accept` (`C-c a a`) — applies suggestion from `suggestion.txt` at point or replacing region
 - `cm/ai-diff` (`C-c a d`) — diffs current text against suggestion
+- `cm/ai-show-suggestions` (`C-c a S`) — opens `*ai-suggestions*` review buffer (see below)
 - For saved files, Claude Code can edit directly — `global-auto-revert-mode` picks up changes
 
-Remote query functions (Claude Code calls via `emacsclient -s <server> -e`):
+Remote query functions — **always use `emacs-send -e` instead of raw `emacsclient`** (it resolves the correct PID-based server, cleans stale sockets, and never spawns rogue instances):
 - `(cm/ai-current-context)` — JSON with file, mode, line, column, region bounds, org heading path
 - `(cm/ai-visible-buffers)` — JSON array of all visible buffers across frames
 - `(cm/ai-get-content)` — snapshots focused buffer to exchange dir, returns context JSON
@@ -68,3 +69,30 @@ Remote query functions (Claude Code calls via `emacsclient -s <server> -e`):
 - `(cm/ai-region-or-paragraph)` — JSON with region text if active, else paragraph at point
 - `(cm/ai-org-subtree-at-point)` — returns org subtree at point (nil outside org-mode)
 - `(cm/ai-nearby-lines)` / `(cm/ai-nearby-lines N)` — context lines around point with arrow marker
+- `(cm/ai-show-suggestions)` — display `*ai-suggestions*` buffer from `suggestions.json`
+
+### Multi-Suggestion Review (`*ai-suggestions*` buffer)
+
+For presenting multiple rewrite options, Claude Code writes `~/.emacs-ai/suggestions.json` then calls `(cm/ai-show-suggestions)` via emacsclient. The buffer shows original text and suggestions side-by-side with single-key navigation:
+- `n`/`p` — next/previous section
+- `a` or `RET` — apply suggestion at point to source buffer
+- `d` — diff suggestion vs original
+- `q` — dismiss
+
+**`suggestions.json` format:**
+```json
+{
+  "original": "the original text",
+  "suggestions": [
+    { "label": "More concise", "text": "rewritten version 1" },
+    { "label": "Formal tone", "text": "rewritten version 2" }
+  ],
+  "source": {
+    "file": "/path/to/file",
+    "buffer": "buffer-name",
+    "scope": "region|buffer|paragraph|subtree",
+    "start-line": 9,
+    "end-line": 9
+  }
+}
+```

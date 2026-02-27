@@ -119,6 +119,23 @@
 (use-package server
   :straight nil
   :config
+  (defun cm/clean-stale-server-sockets ()
+    "Remove server sockets for Emacs PIDs that are no longer running."
+    (let ((dir (or server-socket-dir
+                   (format "/run/user/%d/emacs" (user-uid))
+                   (format "/tmp/emacs%d" (user-uid)))))
+      (when (file-directory-p dir)
+        (dolist (sock (directory-files dir t "\\`emacs-[0-9]+\\'"))
+          (let ((pid (string-to-number
+                      (substring (file-name-nondirectory sock)
+                                 (length "emacs-")))))
+            (unless (or (= pid (emacs-pid))
+                        (and (> pid 0)
+                             (file-exists-p (format "/proc/%d" pid))))
+              (delete-file sock)
+              (message "Cleaned stale server socket: %s"
+                       (file-name-nondirectory sock))))))))
+  (cm/clean-stale-server-sockets)
   (setq server-name (format "emacs-%d" (emacs-pid)))
   (unless (server-running-p)
     (server-start))
@@ -1699,6 +1716,270 @@ The suggestion file is deleted after application."
 (define-key cm/ai-map (kbd "s") #'cm/ai-share)
 (define-key cm/ai-map (kbd "a") #'cm/ai-accept)
 (define-key cm/ai-map (kbd "d") #'cm/ai-diff)
+(define-key cm/ai-map (kbd "S") #'cm/ai-show-suggestions)
+
+;;;; Interactive suggestions buffer.
+;; Reads ~/.emacs-ai/suggestions.json (written by Claude Code) and presents
+;; original text alongside multiple rewrite suggestions in a navigable,
+;; read-only buffer.  The user can review, diff, and apply with single keys.
+
+(defface cm/ai-suggestions-heading-original
+  '((t :foreground "#80FFEA" :weight bold :height 1.1))
+  "Face for the original-text heading in `*ai-suggestions*'.")
+
+(defface cm/ai-suggestions-heading
+  '((t :foreground "#8AFF80" :weight bold :height 1.1))
+  "Face for suggestion headings in `*ai-suggestions*'.")
+
+(defface cm/ai-suggestions-original
+  '((t :inherit font-lock-comment-face :slant italic))
+  "Face for original text in `*ai-suggestions*'.")
+
+(defface cm/ai-suggestions-text
+  '((t :inherit default))
+  "Face for suggestion text in `*ai-suggestions*'.")
+
+(add-to-list 'display-buffer-alist
+             '("\\*ai-suggestions\\*"
+               (display-buffer-reuse-window display-buffer-below-selected)
+               (window-height . 0.4)))
+
+(defvar-local cm/ai-suggestions--source nil
+  "Source metadata plist from suggestions.json.")
+(defvar-local cm/ai-suggestions--data nil
+  "Parsed suggestions.json as an alist.")
+(defvar-local cm/ai-suggestions--original nil
+  "Original text from suggestions.json.")
+
+(defvar cm/ai-suggestions-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "n") #'cm/ai-suggestions-next-section)
+    (define-key map (kbd "p") #'cm/ai-suggestions-prev-section)
+    (define-key map (kbd "a") #'cm/ai-suggestions-apply)
+    (define-key map (kbd "RET") #'cm/ai-suggestions-apply)
+    (define-key map (kbd "d") #'cm/ai-suggestions-diff)
+    map)
+  "Keymap for `cm/ai-suggestions-mode'.")
+
+(define-derived-mode cm/ai-suggestions-mode special-mode "AI-Suggestions"
+  "Major mode for reviewing AI writing suggestions.
+\\<cm/ai-suggestions-mode-map>
+\\[cm/ai-suggestions-next-section]  next section
+\\[cm/ai-suggestions-prev-section]  previous section
+\\[cm/ai-suggestions-apply]  apply suggestion at point
+\\[cm/ai-suggestions-diff]  diff suggestion at point vs original
+\\[quit-window]  dismiss"
+  :group 'cm
+  (setq-local line-spacing 0.2)
+  (setq-local truncate-lines nil)
+  (setq-local word-wrap t))
+
+(defun cm/ai-suggestions--read-json ()
+  "Read and parse suggestions.json from the AI exchange directory.
+Returns the parsed JSON as an alist."
+  (let ((path (expand-file-name "suggestions.json" cm/ai-exchange-dir)))
+    (unless (file-exists-p path)
+      (user-error "No suggestions.json found in %s" cm/ai-exchange-dir))
+    (json-parse-string
+     (with-temp-buffer
+       (insert-file-contents path)
+       (buffer-string))
+     :object-type 'alist
+     :array-type 'list)))
+
+(defun cm/ai-suggestions--render (data)
+  "Render DATA (parsed suggestions.json) into the current buffer."
+  (let ((inhibit-read-only t)
+        (original (alist-get 'original data))
+        (suggestions (alist-get 'suggestions data)))
+    (erase-buffer)
+    ;; Original section
+    (let ((header-start (point)))
+      (insert (propertize "── Original "
+                          'face 'cm/ai-suggestions-heading-original))
+      (insert (propertize (make-string (max 1 (- (window-width) 14)) ?─)
+                          'face 'cm/ai-suggestions-heading-original))
+      (put-text-property header-start (point) 'cm/ai-section-header t)
+      (insert "\n"))
+    (let ((body-start (point)))
+      (insert (propertize original 'face 'cm/ai-suggestions-original))
+      (put-text-property body-start (point) 'cm/ai-section 'original)
+      (insert "\n\n"))
+    ;; Suggestion sections
+    (let ((idx 0))
+      (dolist (suggestion suggestions)
+        (let* ((label (or (alist-get 'label suggestion)
+                          (format "Option %d" (1+ idx))))
+               (text (alist-get 'text suggestion))
+               (header-start (point)))
+          (insert (propertize (format "── Suggestion %d: %s " (1+ idx) label)
+                              'face 'cm/ai-suggestions-heading))
+          (let ((fill (max 1 (- (window-width)
+                                (- (point) header-start) 1))))
+            (insert (propertize (make-string fill ?─)
+                                'face 'cm/ai-suggestions-heading)))
+          (put-text-property header-start (point) 'cm/ai-section-header t)
+          (insert "\n")
+          (let ((body-start (point)))
+            (insert (propertize text 'face 'cm/ai-suggestions-text))
+            (put-text-property body-start (point) 'cm/ai-section (cons 'suggestion idx))
+            (insert "\n\n")))
+        (setq idx (1+ idx))))
+    (goto-char (point-min))))
+
+(defun cm/ai-show-suggestions ()
+  "Display the *ai-suggestions* buffer with contents from suggestions.json.
+Call this interactively with \\[cm/ai-show-suggestions] or remotely via:
+  emacsclient -e \\='(cm/ai-show-suggestions)\\='"
+  (interactive)
+  (let* ((data (cm/ai-suggestions--read-json))
+         (buf (get-buffer-create "*ai-suggestions*")))
+    (with-current-buffer buf
+      (cm/ai-suggestions-mode)
+      (cm/ai-suggestions--render data)
+      (setq cm/ai-suggestions--data data
+            cm/ai-suggestions--original (alist-get 'original data)
+            cm/ai-suggestions--source (alist-get 'source data))
+      (set-buffer-modified-p nil)
+      (goto-char (point-min)))
+    (pop-to-buffer buf)))
+
+(defun cm/ai-suggestions-next-section ()
+  "Move point to the next section header."
+  (interactive)
+  (let ((pos (next-single-property-change (point) 'cm/ai-section-header)))
+    (when pos
+      ;; If we're on a header, skip past it first
+      (when (get-text-property pos 'cm/ai-section-header)
+        (let ((end (next-single-property-change pos 'cm/ai-section-header)))
+          (when end
+            (setq pos (next-single-property-change end 'cm/ai-section-header)))))
+      (when pos
+        (goto-char pos)
+        ;; Move to start of body text (line after header)
+        (forward-line 1)))))
+
+(defun cm/ai-suggestions-prev-section ()
+  "Move point to the previous section header."
+  (interactive)
+  (let ((pos (previous-single-property-change (point) 'cm/ai-section-header)))
+    (when pos
+      ;; Find the start of this header
+      (let ((start (previous-single-property-change pos 'cm/ai-section-header)))
+        (when start
+          (goto-char start)
+          (forward-line 1))))))
+
+(defun cm/ai-suggestions--section-at-point ()
+  "Return the section value at point, or nil."
+  (get-text-property (point) 'cm/ai-section))
+
+(defun cm/ai-suggestions--suggestion-text-at-point ()
+  "Return the suggestion text for the section at point, or nil."
+  (let ((section (cm/ai-suggestions--section-at-point)))
+    (cond
+     ((and (consp section) (eq (car section) 'suggestion))
+      (let* ((idx (cdr section))
+             (suggestions (alist-get 'suggestions cm/ai-suggestions--data))
+             (entry (nth idx suggestions)))
+        (alist-get 'text entry)))
+     ((eq section 'original)
+      cm/ai-suggestions--original)
+     (t
+      ;; Try to find nearest section by searching backward
+      (save-excursion
+        (let ((pos (previous-single-property-change (point) 'cm/ai-section)))
+          (when pos
+            (goto-char (1- pos))
+            (cm/ai-suggestions--suggestion-text-at-point))))))))
+
+(defun cm/ai-suggestions--apply-to-source (text)
+  "Replace source content with TEXT using metadata from `cm/ai-suggestions--source'."
+  (let* ((source cm/ai-suggestions--source)
+         (file (alist-get 'file source))
+         (buf-name (alist-get 'buffer source))
+         (scope (alist-get 'scope source))
+         (start-line (alist-get 'start-line source))
+         (end-line (alist-get 'end-line source))
+         (buf (or (and file (not (string-empty-p file))
+                       (find-buffer-visiting file))
+                  (and buf-name (get-buffer buf-name)))))
+    (unless buf
+      (user-error "Source buffer not found: %s" (or file buf-name)))
+    (with-current-buffer buf
+      (let (insert-beg insert-end)
+        (pcase scope
+          ("buffer"
+           (let ((inhibit-read-only t))
+             (erase-buffer)
+             (setq insert-beg (point))
+             (insert text)
+             (setq insert-end (point))))
+          ("subtree"
+           (save-excursion
+             (goto-char (point-min))
+             (when start-line (forward-line (1- start-line)))
+             (when (derived-mode-p 'org-mode)
+               (org-back-to-heading t)
+               (let ((beg (point)))
+                 (org-end-of-subtree t t)
+                 (delete-region beg (point))
+                 (setq insert-beg (point))
+                 (insert text)
+                 (setq insert-end (point))))))
+          (_  ; "region", "paragraph", or anything line-based
+           (save-excursion
+             (goto-char (point-min))
+             (forward-line (1- (or start-line 1)))
+             (let ((beg (point)))
+               (goto-char (point-min))
+               (forward-line (or end-line start-line 1))
+               (delete-region beg (point))
+               (setq insert-beg (point))
+               (insert text)
+               (unless (eq (char-before) ?\n)
+                 (insert "\n"))
+               ;; Preserve blank-line separation if the next line is
+               ;; non-empty (prevents Markdown setext-heading misparse
+               ;; when text sits directly above a "---" rule).
+               (when (and (not (eobp))
+                          (not (eq (char-after) ?\n)))
+                 (insert "\n"))
+               (setq insert-end (point))))))
+        (when (and insert-beg insert-end)
+          (remove-text-properties insert-beg insert-end
+                                  '(face nil font-lock-face nil))
+          (font-lock-ensure insert-beg insert-end))))))
+
+(defun cm/ai-suggestions-apply ()
+  "Apply the suggestion at point to the source buffer."
+  (interactive)
+  (let ((text (cm/ai-suggestions--suggestion-text-at-point)))
+    (unless text
+      (user-error "No suggestion at point"))
+    (when (string= text cm/ai-suggestions--original)
+      (user-error "That's the original text, not a suggestion"))
+    (when (y-or-n-p "Apply this suggestion to source buffer? ")
+      (cm/ai-suggestions--apply-to-source text)
+      (message "Suggestion applied.")
+      (let ((json-path (expand-file-name "suggestions.json" cm/ai-exchange-dir)))
+        (when (file-exists-p json-path)
+          (delete-file json-path)))
+      (quit-window t))))
+
+(defun cm/ai-suggestions-diff ()
+  "Diff the suggestion at point against the original text."
+  (interactive)
+  (let ((text (cm/ai-suggestions--suggestion-text-at-point)))
+    (unless text
+      (user-error "No suggestion at point"))
+    (let ((orig-file (make-temp-file "ai-original-"))
+          (sugg-file (make-temp-file "ai-suggestion-")))
+      (with-temp-file orig-file
+        (insert cm/ai-suggestions--original))
+      (with-temp-file sugg-file
+        (insert text))
+      (diff orig-file sugg-file nil t))))
 
 ;;;; Keybinding cheat sheet (high-frequency).
 ;; Search/navigation:
@@ -1721,6 +2002,7 @@ The suggestion file is deleted after application."
 ;;   C-c a s  share buffer/region/subtree with AI
 ;;   C-c a a  accept AI suggestion
 ;;   C-c a d  diff current vs AI suggestion
+;;   C-c a S  show *ai-suggestions* buffer (n/p/a/d/q)
 ;;
 ;; AI writing assistant (remote — Claude Code calls via emacsclient -e):
 ;;   (cm/ai-current-context)         → JSON metadata for focused buffer
@@ -1733,6 +2015,7 @@ The suggestion file is deleted after application."
 ;;   (cm/ai-org-subtree-at-point)    → org subtree (nil outside org-mode)
 ;;   (cm/ai-nearby-lines)            → ±5 lines with → marker on current line
 ;;   (cm/ai-nearby-lines N)          → ±N lines with → marker
+;;   (cm/ai-show-suggestions)        → display *ai-suggestions* from suggestions.json
 
 
 ;;; init.el ends here

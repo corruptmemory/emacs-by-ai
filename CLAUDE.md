@@ -56,5 +56,10 @@ File-based exchange protocol at `~/.emacs-ai/` for interactive writing feedback:
 - `cm/ai-share` (`C-c a s`) — snapshots buffer, region, or org subtree (C-u) to `content.txt` + `context.json`
 - `cm/ai-accept` (`C-c a a`) — applies suggestion from `suggestion.txt` at point or replacing region
 - `cm/ai-diff` (`C-c a d`) — diffs current text against suggestion
-- Claude Code can also trigger `cm/ai-share` remotely via `emacsclient -s <server> -e '(cm/ai-share)'`
 - For saved files, Claude Code can edit directly — `global-auto-revert-mode` picks up changes
+
+Remote query functions (Claude Code calls via `emacsclient -s <server> -e`):
+- `(cm/ai-current-context)` — returns JSON with file, mode, line, column, region bounds, org heading path
+- `(cm/ai-visible-buffers)` — returns JSON array of all visible buffers across frames
+- `(cm/ai-get-content)` — snapshots focused buffer to exchange dir, returns context JSON
+- `(cm/ai-get-content "buffer-name")` — snapshots a specific buffer by name

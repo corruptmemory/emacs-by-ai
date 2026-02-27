@@ -80,7 +80,16 @@ File-based exchange protocol for side-by-side use with Claude Code (or any AI to
 | `C-c a a` | Accept/apply AI suggestion at point or region |
 | `C-c a d` | Diff current text against AI suggestion |
 
-Claude Code can also trigger `cm/ai-share` remotely via `emacsclient`, or edit files directly (auto-revert picks up changes).
+Claude Code can also query Emacs state directly via `emacsclient -s <server> -e`:
+
+| Function | Returns |
+|----------|---------|
+| `(cm/ai-current-context)` | JSON: file, mode, line, column, region, org path |
+| `(cm/ai-visible-buffers)` | JSON array of all visible buffers across frames |
+| `(cm/ai-get-content)` | Snapshots focused buffer to `~/.emacs-ai/`, returns context JSON |
+| `(cm/ai-get-content "name")` | Snapshots a specific buffer by name |
+
+For saved files, Claude Code can edit directly — `global-auto-revert-mode` picks up changes.
 
 ## Additional packages
 

@@ -1440,10 +1440,16 @@ With prefix argument REFRESH, rebuild completion cache first."
 ;;   C-c a a   accept/apply AI suggestion at point or region
 ;;   C-c a d   diff current text against AI suggestion
 ;;
-;; From Claude Code:
-;;   Read ~/.emacs-ai/context.json and ~/.emacs-ai/content.txt
-;;   Write suggestion to ~/.emacs-ai/suggestion.txt
-;;   Or: emacsclient -s <server> -e '(cm/ai-share)' to trigger snapshot
+;; Remote query (Claude Code calls via emacsclient -e):
+;;   (cm/ai-current-context)             → JSON: file, mode, line, region, etc.
+;;   (cm/ai-visible-buffers)             → JSON array of all visible buffers
+;;   (cm/ai-get-content)                 → snapshot focused buffer → exchange dir
+;;   (cm/ai-get-content "buf-name")      → snapshot named buffer → exchange dir
+;;
+;; File exchange:
+;;   ~/.emacs-ai/context.json   metadata (written by share/get-content)
+;;   ~/.emacs-ai/content.txt    buffer text (written by share/get-content)
+;;   ~/.emacs-ai/suggestion.txt AI suggestion (read by accept/diff)
 ;;   Or: edit the file directly (auto-revert picks it up)
 
 (defvar cm/ai-exchange-dir (expand-file-name "~/.emacs-ai/")
@@ -1470,6 +1476,86 @@ With prefix argument REFRESH, rebuild completion cache first."
 (defun cm/ai--server-name ()
   "Return the current Emacs server name, or nil."
   (and (boundp 'server-name) server-name))
+
+;;;; Remote-query functions — called by Claude Code via emacsclient -e.
+;; These let the AI inspect Emacs state without the user pressing anything.
+
+(defun cm/ai-current-context ()
+  "Return JSON string describing the focused buffer's editing context.
+Designed for `emacsclient -s <server> -e \\='(cm/ai-current-context)\\=''.
+Returns file path, mode, cursor position, active region bounds, etc."
+  (let* ((win (selected-window))
+         (buf (window-buffer win)))
+    (with-current-buffer buf
+      (let* ((region-p (use-region-p))
+             (context
+              `((file . ,(or (buffer-file-name) ""))
+                (buffer . ,(buffer-name))
+                (mode . ,(symbol-name major-mode))
+                (line . ,(line-number-at-pos))
+                (column . ,(current-column))
+                (org-path . ,(or (cm/ai--org-heading-path) []))
+                (modified . ,(if (buffer-modified-p) t :json-false))
+                (server . ,(or (cm/ai--server-name) ""))
+                (region . ,(if region-p
+                               `((start-line . ,(line-number-at-pos (region-beginning)))
+                                 (end-line . ,(line-number-at-pos (region-end)))
+                                 (chars . ,(- (region-end) (region-beginning))))
+                             :json-false))
+                (timestamp . ,(format-time-string "%Y-%m-%dT%H:%M:%S")))))
+        (json-encode context)))))
+
+(defun cm/ai-visible-buffers ()
+  "Return JSON array describing all visible buffers across frames.
+Designed for `emacsclient -e' — lets AI see what windows are open."
+  (let (result)
+    (walk-windows
+     (lambda (win)
+       (let ((buf (window-buffer win)))
+         (push `((file . ,(or (buffer-file-name buf) ""))
+                 (buffer . ,(buffer-name buf))
+                 (mode . ,(symbol-name (buffer-local-value 'major-mode buf)))
+                 (selected . ,(if (eq win (selected-window)) t :json-false)))
+               result)))
+     nil t)
+    (json-encode (nreverse result))))
+
+(defun cm/ai-get-content (&optional buffer-name-or-nil)
+  "Snapshot buffer content to exchange dir; return context as JSON string.
+Without BUFFER-NAME-OR-NIL, uses the focused window's buffer.
+If the buffer has an active region, only that text is captured.
+Writes content.txt and context.json to `cm/ai-exchange-dir'.
+Designed for `emacsclient -e \\='(cm/ai-get-content)\\='' or
+`emacsclient -e \\='(cm/ai-get-content \"some-buffer\")\\=''."
+  (cm/ai--ensure-dir)
+  (let* ((buf (if buffer-name-or-nil
+                  (or (get-buffer buffer-name-or-nil)
+                      (error "No buffer named %s" buffer-name-or-nil))
+                (window-buffer (selected-window)))))
+    (with-current-buffer buf
+      (let* ((region-p (use-region-p))
+             (content (if region-p
+                          (buffer-substring-no-properties (region-beginning) (region-end))
+                        (buffer-substring-no-properties (point-min) (point-max))))
+             (scope (if region-p "region" "buffer"))
+             (context
+              `((file . ,(or (buffer-file-name) ""))
+                (buffer . ,(buffer-name))
+                (mode . ,(symbol-name major-mode))
+                (line . ,(line-number-at-pos))
+                (column . ,(current-column))
+                (scope . ,scope)
+                (org-path . ,(or (cm/ai--org-heading-path) []))
+                (modified . ,(if (buffer-modified-p) t :json-false))
+                (server . ,(or (cm/ai--server-name) ""))
+                (timestamp . ,(format-time-string "%Y-%m-%dT%H:%M:%S"))
+                (chars . ,(length content)))))
+        (with-temp-file (expand-file-name "content.txt" cm/ai-exchange-dir)
+          (insert content))
+        (let ((json (json-encode context)))
+          (with-temp-file (expand-file-name "context.json" cm/ai-exchange-dir)
+            (insert json))
+          json)))))
 
 (defun cm/ai-share (&optional arg)
   "Share current editing context with AI assistant.
@@ -1568,10 +1654,16 @@ The suggestion file is deleted after application."
 ;;   C-=     er/expand-region
 ;;   C--     er/contract-region
 ;;
-;; AI writing assistant:
+;; AI writing assistant (interactive):
 ;;   C-c a s  share buffer/region/subtree with AI
 ;;   C-c a a  accept AI suggestion
 ;;   C-c a d  diff current vs AI suggestion
+;;
+;; AI writing assistant (remote — Claude Code calls via emacsclient -e):
+;;   (cm/ai-current-context)         → JSON metadata for focused buffer
+;;   (cm/ai-visible-buffers)         → JSON array of all visible buffers
+;;   (cm/ai-get-content)             → snapshot focused buffer to exchange dir
+;;   (cm/ai-get-content "buf-name")  → snapshot named buffer to exchange dir
 
 
 ;;; init.el ends here

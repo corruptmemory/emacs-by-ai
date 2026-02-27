@@ -88,6 +88,11 @@ Claude Code can also query Emacs state directly via `emacsclient -s <server> -e`
 | `(cm/ai-visible-buffers)` | JSON array of all visible buffers across frames |
 | `(cm/ai-get-content)` | Snapshots focused buffer to `~/.emacs-ai/`, returns context JSON |
 | `(cm/ai-get-content "name")` | Snapshots a specific buffer by name |
+| `(cm/ai-paragraph-at-point)` | Paragraph text at point |
+| `(cm/ai-line-at-point)` | Current line text |
+| `(cm/ai-region-or-paragraph)` | JSON: region if active, else paragraph at point |
+| `(cm/ai-org-subtree-at-point)` | Org subtree at point (nil outside org-mode) |
+| `(cm/ai-nearby-lines)` | ±5 lines around point with arrow marker |
 
 For saved files, Claude Code can edit directly — `global-auto-revert-mode` picks up changes.
 

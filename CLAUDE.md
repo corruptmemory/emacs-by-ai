@@ -59,7 +59,12 @@ File-based exchange protocol at `~/.emacs-ai/` for interactive writing feedback:
 - For saved files, Claude Code can edit directly — `global-auto-revert-mode` picks up changes
 
 Remote query functions (Claude Code calls via `emacsclient -s <server> -e`):
-- `(cm/ai-current-context)` — returns JSON with file, mode, line, column, region bounds, org heading path
-- `(cm/ai-visible-buffers)` — returns JSON array of all visible buffers across frames
+- `(cm/ai-current-context)` — JSON with file, mode, line, column, region bounds, org heading path
+- `(cm/ai-visible-buffers)` — JSON array of all visible buffers across frames
 - `(cm/ai-get-content)` — snapshots focused buffer to exchange dir, returns context JSON
 - `(cm/ai-get-content "buffer-name")` — snapshots a specific buffer by name
+- `(cm/ai-paragraph-at-point)` — returns paragraph text at point (no side effects)
+- `(cm/ai-line-at-point)` — returns current line text
+- `(cm/ai-region-or-paragraph)` — JSON with region text if active, else paragraph at point
+- `(cm/ai-org-subtree-at-point)` — returns org subtree at point (nil outside org-mode)
+- `(cm/ai-nearby-lines)` / `(cm/ai-nearby-lines N)` — context lines around point with arrow marker

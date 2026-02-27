@@ -1445,6 +1445,12 @@ With prefix argument REFRESH, rebuild completion cache first."
 ;;   (cm/ai-visible-buffers)             → JSON array of all visible buffers
 ;;   (cm/ai-get-content)                 → snapshot focused buffer → exchange dir
 ;;   (cm/ai-get-content "buf-name")      → snapshot named buffer → exchange dir
+;;   (cm/ai-paragraph-at-point)          → text of paragraph at point
+;;   (cm/ai-line-at-point)               → text of current line
+;;   (cm/ai-region-or-paragraph)         → JSON: region if active, else paragraph
+;;   (cm/ai-org-subtree-at-point)        → org subtree text (nil if not org-mode)
+;;   (cm/ai-nearby-lines)                → ±5 lines around point with → marker
+;;   (cm/ai-nearby-lines N)              → ±N lines around point
 ;;
 ;; File exchange:
 ;;   ~/.emacs-ai/context.json   metadata (written by share/get-content)
@@ -1557,6 +1563,63 @@ Designed for `emacsclient -e \\='(cm/ai-get-content)\\='' or
             (insert json))
           json)))))
 
+(defun cm/ai-paragraph-at-point ()
+  "Return the paragraph surrounding point in the focused buffer.
+Does not disturb point, mark, or region."
+  (with-current-buffer (window-buffer (selected-window))
+    (save-excursion
+      (let ((beg (progn (backward-paragraph) (skip-chars-forward "\n") (point)))
+            (end (progn (forward-paragraph) (skip-chars-backward "\n") (point))))
+        (buffer-substring-no-properties beg end)))))
+
+(defun cm/ai-line-at-point ()
+  "Return the current line in the focused buffer."
+  (with-current-buffer (window-buffer (selected-window))
+    (buffer-substring-no-properties (line-beginning-position) (line-end-position))))
+
+(defun cm/ai-region-or-paragraph ()
+  "Return active region text if any, otherwise the paragraph at point.
+Returns a JSON object with `scope' (\"region\" or \"paragraph\") and `text'."
+  (with-current-buffer (window-buffer (selected-window))
+    (let* ((region-p (use-region-p))
+           (text (if region-p
+                     (buffer-substring-no-properties (region-beginning) (region-end))
+                   (save-excursion
+                     (let ((beg (progn (backward-paragraph)
+                                       (skip-chars-forward "\n") (point)))
+                           (end (progn (forward-paragraph)
+                                       (skip-chars-backward "\n") (point))))
+                       (buffer-substring-no-properties beg end))))))
+      (json-encode `((scope . ,(if region-p "region" "paragraph"))
+                     (text . ,text)
+                     (chars . ,(length text)))))))
+
+(defun cm/ai-org-subtree-at-point ()
+  "Return the org subtree at point, or nil if not in `org-mode'."
+  (with-current-buffer (window-buffer (selected-window))
+    (when (derived-mode-p 'org-mode)
+      (save-excursion
+        (org-back-to-heading t)
+        (let ((beg (point)))
+          (org-end-of-subtree t t)
+          (buffer-substring-no-properties beg (point)))))))
+
+(defun cm/ai-nearby-lines (&optional n)
+  "Return N lines above and below point (default 5) with a → marker on the current line."
+  (with-current-buffer (window-buffer (selected-window))
+    (let* ((n (or n 5))
+           (cur (line-number-at-pos))
+           (beg (save-excursion (forward-line (- n)) (point)))
+           (end (save-excursion (forward-line (1+ n)) (point)))
+           (lines (split-string (buffer-substring-no-properties beg end) "\n"))
+           (start-line (- cur n))
+           (result '()))
+      (dotimes (i (length lines))
+        (let* ((lnum (+ start-line i))
+               (prefix (if (= lnum cur) "→" " ")))
+          (push (format "%s %4d: %s" prefix lnum (nth i lines)) result)))
+      (mapconcat #'identity (nreverse result) "\n"))))
+
 (defun cm/ai-share (&optional arg)
   "Share current editing context with AI assistant.
 Snapshots buffer content to `cm/ai-exchange-dir' along with JSON
@@ -1664,6 +1727,12 @@ The suggestion file is deleted after application."
 ;;   (cm/ai-visible-buffers)         → JSON array of all visible buffers
 ;;   (cm/ai-get-content)             → snapshot focused buffer to exchange dir
 ;;   (cm/ai-get-content "buf-name")  → snapshot named buffer to exchange dir
+;;   (cm/ai-paragraph-at-point)      → paragraph text at point
+;;   (cm/ai-line-at-point)           → current line text
+;;   (cm/ai-region-or-paragraph)     → JSON: region if active, else paragraph
+;;   (cm/ai-org-subtree-at-point)    → org subtree (nil outside org-mode)
+;;   (cm/ai-nearby-lines)            → ±5 lines with → marker on current line
+;;   (cm/ai-nearby-lines N)          → ±N lines with → marker
 
 
 ;;; init.el ends here

@@ -865,7 +865,16 @@ Valid entries must have a regexp string as their car."
                                                ('gnu/linux "jai-linux")
                                                ('darwin "jai-macos")
                                                ('windows-nt "jai.exe")
-                                               (_ "jai-linux"))))))
+                                               (_ "jai-linux")))))
+  ;; Harper — grammar/spell checking for writing modes.
+  ;; Requires: sudo pacman -S harper (provides harper-ls)
+  (add-to-list 'eglot-server-programs
+               '((org-mode markdown-mode gfm-mode text-mode) . ("harper-ls" "--stdio"))))
+
+;;;; Harper eglot hooks — enable grammar checking in writing modes.
+(when (executable-find "harper-ls")
+  (dolist (hook '(org-mode-hook markdown-mode-hook gfm-mode-hook))
+    (add-hook hook #'eglot-ensure)))
 
 ;;;; dumb-jump — xref fallback for languages without stable LSP/tags.
 (use-package dumb-jump
@@ -1420,6 +1429,128 @@ With prefix argument REFRESH, rebuild completion cache first."
 
 (setq shift-select-mode 'permanent)
 
+;;; -----------------------------------------------------------------------
+;;; AI writing assistant — exchange protocol for Claude Code integration
+;;; -----------------------------------------------------------------------
+;; Side-by-side workflow: Emacs for writing, Claude Code for feedback.
+;; Communication uses a shared directory (~/.emacs-ai/) with file exchange.
+;;
+;; From Emacs:
+;;   C-c a s   share buffer, region, or org subtree (C-u) with AI
+;;   C-c a a   accept/apply AI suggestion at point or region
+;;   C-c a d   diff current text against AI suggestion
+;;
+;; From Claude Code:
+;;   Read ~/.emacs-ai/context.json and ~/.emacs-ai/content.txt
+;;   Write suggestion to ~/.emacs-ai/suggestion.txt
+;;   Or: emacsclient -s <server> -e '(cm/ai-share)' to trigger snapshot
+;;   Or: edit the file directly (auto-revert picks it up)
+
+(defvar cm/ai-exchange-dir (expand-file-name "~/.emacs-ai/")
+  "Directory for AI <-> Emacs file exchange.")
+
+(defun cm/ai--ensure-dir ()
+  "Create exchange directory if needed."
+  (make-directory cm/ai-exchange-dir t))
+
+(defun cm/ai--org-heading-path ()
+  "Return breadcrumb list of org headings from root to point."
+  (when (derived-mode-p 'org-mode)
+    (save-excursion
+      (let (path)
+        (condition-case nil
+            (while t
+              (org-back-to-heading t)
+              (push (substring-no-properties (org-get-heading t t t t)) path)
+              (unless (org-up-heading-safe)
+                (signal 'error nil)))
+          (error nil))
+        path))))
+
+(defun cm/ai--server-name ()
+  "Return the current Emacs server name, or nil."
+  (and (boundp 'server-name) server-name))
+
+(defun cm/ai-share (&optional arg)
+  "Share current editing context with AI assistant.
+Snapshots buffer content to `cm/ai-exchange-dir' along with JSON
+metadata.  With prefix ARG in `org-mode', shares the current
+subtree instead of the full buffer.  An active region always
+takes priority.
+
+From Claude Code, read ~/.emacs-ai/context.json and
+~/.emacs-ai/content.txt to see what was shared."
+  (interactive "P")
+  (cm/ai--ensure-dir)
+  (let* ((region-p (use-region-p))
+         (subtree-p (and arg (derived-mode-p 'org-mode)))
+         (content
+          (cond
+           (subtree-p
+            (save-excursion
+              (org-back-to-heading t)
+              (let ((beg (point)))
+                (org-end-of-subtree t t)
+                (buffer-substring-no-properties beg (point)))))
+           (region-p
+            (buffer-substring-no-properties (region-beginning) (region-end)))
+           (t
+            (buffer-substring-no-properties (point-min) (point-max)))))
+         (scope (cond (subtree-p "subtree") (region-p "region") (t "buffer")))
+         (context
+          `((file . ,(or (buffer-file-name) ""))
+            (buffer . ,(buffer-name))
+            (mode . ,(symbol-name major-mode))
+            (line . ,(line-number-at-pos))
+            (column . ,(current-column))
+            (scope . ,scope)
+            (org-path . ,(or (cm/ai--org-heading-path) []))
+            (modified . ,(if (buffer-modified-p) t :json-false))
+            (server . ,(or (cm/ai--server-name) ""))
+            (timestamp . ,(format-time-string "%Y-%m-%dT%H:%M:%S")))))
+    (with-temp-file (expand-file-name "content.txt" cm/ai-exchange-dir)
+      (insert content))
+    (with-temp-file (expand-file-name "context.json" cm/ai-exchange-dir)
+      (insert (json-encode context)))
+    (message "Shared %s with AI (%d chars)" scope (length content))))
+
+(defun cm/ai-accept ()
+  "Apply AI suggestion from exchange directory.
+If a region is active, replaces it.  Otherwise inserts at point.
+The suggestion file is deleted after application."
+  (interactive)
+  (let ((path (expand-file-name "suggestion.txt" cm/ai-exchange-dir)))
+    (unless (file-exists-p path)
+      (user-error "No AI suggestion found in %s" cm/ai-exchange-dir))
+    (let ((text (with-temp-buffer
+                  (insert-file-contents path)
+                  (buffer-string))))
+      (when (use-region-p)
+        (delete-region (region-beginning) (region-end)))
+      (insert text)
+      (delete-file path)
+      (message "Applied AI suggestion (%d chars)" (length text)))))
+
+(defun cm/ai-diff ()
+  "Show diff between current buffer/region and AI suggestion."
+  (interactive)
+  (let ((suggestion-file (expand-file-name "suggestion.txt" cm/ai-exchange-dir)))
+    (unless (file-exists-p suggestion-file)
+      (user-error "No AI suggestion found in %s" cm/ai-exchange-dir))
+    (let ((current-file (make-temp-file "emacs-ai-current-")))
+      (if (use-region-p)
+          (write-region (region-beginning) (region-end) current-file nil 'quiet)
+        (write-region (point-min) (point-max) current-file nil 'quiet))
+      (diff current-file suggestion-file nil t)
+      (delete-file current-file))))
+
+(defvar cm/ai-map (make-sparse-keymap)
+  "Keymap for AI writing assistant commands under `C-c a'.")
+(global-set-key (kbd "C-c a") cm/ai-map)
+(define-key cm/ai-map (kbd "s") #'cm/ai-share)
+(define-key cm/ai-map (kbd "a") #'cm/ai-accept)
+(define-key cm/ai-map (kbd "d") #'cm/ai-diff)
+
 ;;;; Keybinding cheat sheet (high-frequency).
 ;; Search/navigation:
 ;;   C-S-s   consult-line (region-seeded)
@@ -1436,6 +1567,11 @@ With prefix argument REFRESH, rebuild completion cache first."
 ;;   M-R     vertico-repeat
 ;;   C-=     er/expand-region
 ;;   C--     er/contract-region
+;;
+;; AI writing assistant:
+;;   C-c a s  share buffer/region/subtree with AI
+;;   C-c a a  accept AI suggestion
+;;   C-c a d  diff current vs AI suggestion
 
 
 ;;; init.el ends here

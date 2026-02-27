@@ -32,7 +32,7 @@ Vertico + Orderless + Consult + Marginalia + Embark in the minibuffer; Corfu + C
 
 ## LSP
 
-Eglot (built-in) with eglot-booster for performance and autoreconnect on server crashes. Hooks are wired for 20+ language modes. Custom LSP server entries for Odin (`ols`), Zig (`zls`), Jai (`jails`), go-templ, GLSL, Fish, and Haskell. xref-union combines Eglot's xref backend with dumb-jump as a fallback in non-LSP buffers.
+Eglot (built-in) with eglot-booster for performance and autoreconnect on server crashes. Hooks are wired for 20+ language modes. Custom LSP server entries for Odin (`ols`), Zig (`zls`), Jai (`jails`), go-templ, GLSL, Fish, Haskell, and Harper (grammar/spell checking for writing modes). xref-union combines Eglot's xref backend with dumb-jump as a fallback in non-LSP buffers.
 
 ## Debugging
 
@@ -70,11 +70,24 @@ Custom xref-based cross-project reference search for SQL identifiers:
 - `cm/sql-complete-object` (`C-c C-o`) — complete SQL object names from live SQLi connection
 - `cm/sql-refresh-completions` (`C-c C-l r`) — rebuild completion cache
 
+## AI writing assistant
+
+File-based exchange protocol for side-by-side use with Claude Code (or any AI tool). Content and context are shared via `~/.emacs-ai/`.
+
+| Key | Action |
+|-----|--------|
+| `C-c a s` | Share buffer, region, or org subtree (`C-u`) with AI |
+| `C-c a a` | Accept/apply AI suggestion at point or region |
+| `C-c a d` | Diff current text against AI suggestion |
+
+Claude Code can also trigger `cm/ai-share` remotely via `emacsclient`, or edit files directly (auto-revert picks up changes).
+
 ## Additional packages
 
 - **vterm** — full terminal emulator inside Emacs (fish shell, 10k scrollback)
 - **editorconfig** — automatically applies `.editorconfig` project settings
 - **flyspell** — spell checking in text-like modes only (text, org, markdown)
+- **harper** — grammar/spell checking LSP for org, markdown, and text modes via eglot
 - **diff-hl flydiff** — live fringe indicators for unsaved changes (not just uncommitted)
 - **docker** — manage containers, images, volumes, and networks (`C-c D`)
 - **pdf-tools** — PDF viewer with annotation support (fit-page by default)
@@ -113,3 +126,4 @@ Run `M-x all-the-icons-install-fonts` once after first install for icon support.
 | `cmake`, `libtool`, C compiler    | vterm module compilation (first use)              |
 | `poppler` (dev libs)              | pdf-tools `epdfinfo` build (first use)            |
 | `docker`                          | docker.el container/image management              |
+| `harper-ls`                       | Grammar/spell checking for writing modes (`pacman -S harper`) |

@@ -34,8 +34,9 @@ The file is organized in this order:
 10. **Editing packages** — multiple-cursors (with symbol-aware mark/skip bindings), expand-region, string-inflection, smartparens, flyspell (text-like modes only: text, org, markdown)
 11. **Git** — Magit, diff-hl (with flydiff for unsaved-change indicators)
 12. **Popup/buffer management** — Popper with project-based grouping, helpful, vterm
-13. **Dev tooling** — treesit-auto, yasnippet, eglot (20+ language hooks, autoreconnect), eglot-booster, consult-eglot, eldoc-box, flymake, dape (DAP)
+13. **Dev tooling** — treesit-auto, yasnippet, eglot (20+ language hooks, autoreconnect, harper-ls for writing modes), eglot-booster, consult-eglot, eldoc-box, flymake, dape (DAP)
 14. **Language configs** — Go (format-on-save, gotest, dape/Delve wrappers with auto-breakpoint), SQL (xref helpers, completion), docker, pdf-tools, then all other languages
+15. **AI writing assistant** — `cm/ai-*` exchange protocol for Claude Code integration (`C-c a` prefix), shared via `~/.emacs-ai/`
 
 ## Naming Conventions
 
@@ -47,4 +48,13 @@ All themes in `themes/` follow the standard Emacs pattern: `deftheme` → color 
 
 ## Custom LSP Servers
 
-Non-default eglot server entries are configured for: Odin (`ols`), Zig (`zls`), Jai (`jails` — path-expanded with OS-adaptive compiler binary name), go-templ (`templ lsp`), GLSL (`glslls`), Fish (`fish-lsp`), Haskell (`haskell-language-server-wrapper`).
+Non-default eglot server entries are configured for: Odin (`ols`), Zig (`zls`), Jai (`jails` — path-expanded with OS-adaptive compiler binary name), go-templ (`templ lsp`), GLSL (`glslls`), Fish (`fish-lsp`), Haskell (`haskell-language-server-wrapper`), Harper (`harper-ls` — grammar/spell checking for org/markdown/text modes).
+
+## AI Writing Assistant (Claude Code Integration)
+
+File-based exchange protocol at `~/.emacs-ai/` for interactive writing feedback:
+- `cm/ai-share` (`C-c a s`) — snapshots buffer, region, or org subtree (C-u) to `content.txt` + `context.json`
+- `cm/ai-accept` (`C-c a a`) — applies suggestion from `suggestion.txt` at point or replacing region
+- `cm/ai-diff` (`C-c a d`) — diffs current text against suggestion
+- Claude Code can also trigger `cm/ai-share` remotely via `emacsclient -s <server> -e '(cm/ai-share)'`
+- For saved files, Claude Code can edit directly — `global-auto-revert-mode` picks up changes

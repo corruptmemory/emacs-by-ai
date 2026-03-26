@@ -1377,6 +1377,12 @@ With prefix argument REFRESH, rebuild completion cache first."
   :straight (:host github :repo "elp-revive/jai-mode")
   :mode "\\.jai\\'")
 
+;;;; Scala.
+;; scala-ts-mode provides tree-sitter font-lock, indentation, and imenu.
+;; treesit-auto handles grammar install and scala-mode → scala-ts-mode remap.
+;; No LSP — metals is too painful.
+(use-package scala-ts-mode)
+
 ;;;; Haskell.
 (use-package haskell-mode)
 

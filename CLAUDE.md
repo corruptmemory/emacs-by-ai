@@ -23,7 +23,7 @@ emacs --init-directory=~/projects/emacs-again/
 The file is organized in this order:
 
 1. **Startup/bootstrap** — timing display, straight.el bootstrap, use-package integration
-2. **Core settings** — custom file, local overrides, backups, auto-revert, delete-selection, electric-indent, tabs, recentf, saveplace, per-instance server (PID-named, stale socket cleanup)
+2. **Core settings** — custom file, local overrides, backups, auto-revert, delete-selection, electric-indent, electric-pair (auto-close + brace expansion on RET), tabs, recentf, saveplace, per-instance server (PID-named, stale socket cleanup)
 3. **PATH** — adds ~/.cargo/bin, ~/.local/bin, ~/go/bin, ~/projects/Odin, ~/projects/ols to exec-path
 4. **Theme and fonts** — loads dracula-pro-blade, sets TX-02/Fira Sans/JoyPixels, auto-adjusts fringe contrast
 5. **Scrolling** — pixel-scroll-precision-mode with wheel/trackpad profiles driven by `cm/mouse-profile`; trackpad flips horizontal scroll and disables interpolated page scroll for instant PgUp/PgDn

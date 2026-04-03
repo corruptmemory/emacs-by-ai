@@ -84,6 +84,10 @@
 ;; On by default in Emacs 29+; made explicit for clarity.
 (electric-indent-mode 1)
 
+;;;; Electric pairs — auto-insert closing delimiters and, crucially,
+;;;; expand {|} into a three-line block on RET (electric-pair-open-newline-between-pairs).
+(electric-pair-mode 1)
+
 ;;;; Tab display/indent defaults.
 ;; Keep literal tab characters visually narrow unless a mode overrides it.
 (setq-default tab-width 4)
@@ -1312,6 +1316,9 @@ With prefix argument REFRESH, rebuild completion cache first."
 
 ;;;; C / C++.
 ;; c-ts-mode and c++-ts-mode are built-in; clangd is eglot's default.
+;; Indent with spaces, not tabs.
+(dolist (hook '(c-ts-mode-hook c++-ts-mode-hook c-mode-hook c++-mode-hook))
+  (add-hook hook (lambda () (setq-local indent-tabs-mode nil))))
 
 ;;;; Odin.
 (use-package odin-mode
@@ -1375,7 +1382,8 @@ With prefix argument REFRESH, rebuild completion cache first."
 ;;;; Jai.
 (use-package jai-mode
   :straight (:host github :repo "elp-revive/jai-mode")
-  :mode "\\.jai\\'")
+  :mode "\\.jai\\'"
+  :hook (jai-mode . (lambda () (setq-local indent-tabs-mode nil))))
 
 ;;;; Scala.
 ;; scala-ts-mode provides tree-sitter font-lock, indentation, and imenu.

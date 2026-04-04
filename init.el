@@ -857,7 +857,6 @@ Valid entries must have a regexp string as their car."
     zig-mode
     odin-mode
     haskell-mode
-    jai-mode
     templ-ts-mode) . eglot-ensure)
   :custom
   (eglot-extend-to-xref t)
@@ -879,14 +878,12 @@ Valid entries must have a regexp string as their car."
   (add-to-list 'eglot-server-programs '(fish-mode . ("fish-lsp" "start")))
   (add-to-list 'eglot-server-programs
                '((haskell-mode) . ("haskell-language-server-wrapper" "--lsp")))
-  (add-to-list 'eglot-server-programs
-               `(jai-mode . (,(expand-file-name "~/projects/Jails/bin/jails")
-                             "-jai_path" ,(expand-file-name "~/jai/jai/")
-                             "-jai_exe_name" ,(pcase system-type
-                                               ('gnu/linux "jai-linux")
-                                               ('darwin "jai-macos")
-                                               ('windows-nt "jai.exe")
-                                               (_ "jai-linux")))))
+  ;; jails (Jai LSP) must be built manually from ~/projects/Jails.
+  ;; Uncomment once the binary exists at ~/projects/Jails/bin/jails.
+  ;; (add-to-list 'eglot-server-programs
+  ;;              `((jai-ts-mode) . (,(expand-file-name "~/projects/Jails/bin/jails")
+  ;;                                "-jai_path" ,(expand-file-name "~/jai/jai/")
+  ;;                                "-jai_exe_name" "jai-linux")))
   ;; Harper — grammar/spell checking for writing modes.
   ;; Requires: sudo pacman -S harper (provides harper-ls)
   (add-to-list 'eglot-server-programs
@@ -1380,10 +1377,10 @@ With prefix argument REFRESH, rebuild completion cache first."
 ;; Install eclipse.jdt.ls and ensure it is on your PATH.
 
 ;;;; Jai.
-(use-package jai-mode
-  :straight (:host github :repo "elp-revive/jai-mode")
-  :mode "\\.jai\\'"
-  :hook (jai-mode . (lambda () (setq-local indent-tabs-mode nil))))
+;; jai-ts-mode.el: regex font-lock + syntax table.  Tree-sitter is not used —
+;; Jai's bracketed/unbracketed control forms exceed tree-sitter's 64K state
+;; limit.  Enable eglot once jails is built (see commented entry above).
+(load (locate-user-emacs-file "jai-ts-mode") t)
 
 ;;;; Scala.
 ;; scala-ts-mode provides tree-sitter font-lock, indentation, and imenu.

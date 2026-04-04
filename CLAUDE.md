@@ -14,6 +14,7 @@ emacs --init-directory=~/projects/emacs-again/
 
 - `early-init.el` — GC tuning, UI suppression, native-comp settings, fringe/cursor config
 - `init.el` — Package management (straight.el + use-package), all packages, keybindings, language configs
+- `jai-ts-mode.el` — Jai major mode (regex font-lock + syntax table; tree-sitter intentionally not used — see below)
 - `themes/` — Custom color themes (Dracula Pro Blade/Pro, Naysayer)
 - `local-settings.el` — Machine-specific overrides (git-ignored); sets `cm/mouse-profile` etc.
 - `scripts/emacs-send` — Shell script for sending files/commands to a running Emacs instance (self-installs via `--install`)
@@ -48,7 +49,13 @@ All themes in `themes/` follow the standard Emacs pattern: `deftheme` → color 
 
 ## Custom LSP Servers
 
-Non-default eglot server entries are configured for: Odin (`ols`), Zig (`zls`), Jai (`jails` — path-expanded with OS-adaptive compiler binary name), go-templ (`templ lsp`), GLSL (`glslls`), Fish (`fish-lsp`), Haskell (`haskell-language-server-wrapper`), Harper (`harper-ls` — grammar/spell checking for org/markdown/text modes).
+Non-default eglot server entries are configured for: Odin (`ols`), Zig (`zls`), go-templ (`templ lsp`), GLSL (`glslls`), Fish (`fish-lsp`), Haskell (`haskell-language-server-wrapper`), Harper (`harper-ls` — grammar/spell checking for org/markdown/text modes).
+
+Jai (`jails`) is commented out — the binary must be built manually from `~/projects/Jails`. Uncomment the `eglot-server-programs` entry and add `jai-ts-mode` back to the eglot hook list once it exists.
+
+## Jai and Tree-Sitter
+
+`jai-ts-mode.el` deliberately does **not** use tree-sitter. Jai's bracketed/unbracketed control flow variants (every control form has both `if x { }` and `if x stmt;` styles) cause the LR automaton state count to exceed tree-sitter's hard-coded 64K limit. Multiple serious attempts to build a complete grammar failed for this reason. The best available grammar (`overlord-systems/jai-tree-sitter`) only parses variable declarations and produces ERROR nodes for nearly all real code. Syntax highlighting uses regex font-lock instead.
 
 ## AI Writing Assistant (Claude Code Integration)
 

@@ -154,6 +154,7 @@
 ;;;; PATH configuration.
 (dolist (dir '("~/.cargo/bin"
                "~/.local/bin"
+               "~/.elan/bin"
                "~/go/bin"
                "~/projects/Odin"
                "~/projects/ols"))
@@ -1387,6 +1388,20 @@ With prefix argument REFRESH, rebuild completion cache first."
 ;; treesit-auto handles grammar install and scala-mode → scala-ts-mode remap.
 ;; No LSP — metals is too painful.
 (use-package scala-ts-mode)
+
+;;;; Lean 4.
+;; lean4-mode provides syntax highlighting, LSP integration (via lsp-mode, not
+;; eglot), and the interactive Info-View buffer for proof state / goal display.
+;; lsp-mode is pulled in as a dependency but only activates in Lean buffers —
+;; eglot remains the LSP client for everything else.
+;; Requires: elan + lean toolchain (https://lean-lang.org/lean4/doc/setup.html)
+(use-package lean4-mode
+  :straight (lean4-mode :type git :host github
+                        :repo "leanprover-community/lean4-mode"
+                        :files ("*.el" "data"))
+  :hook (lean4-mode . (lambda () (setq-local indent-tabs-mode nil)))
+  :custom
+  (lsp-lean4-lake-enabled t))
 
 ;;;; Haskell.
 (use-package haskell-mode)

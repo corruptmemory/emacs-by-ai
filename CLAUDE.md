@@ -55,6 +55,18 @@ Jai (`jails`) is commented out — the binary must be built manually from `~/pro
 
 Lean 4 uses **lsp-mode** (not eglot) via `lean4-mode` — this is the one exception to the eglot-everywhere pattern. lsp-mode is pulled in as a dependency and only activates in `.lean` buffers. The interactive Info-View (`C-c C-i` to toggle; shows proof state / goals) requires lsp-mode's extension hooks. `lsp-completion-provider` is set to `:none` so corfu handles completion via capf instead of company-mode. Requires `elan` toolchain manager (`~/.elan/bin` is on exec-path).
 
+## Tree-Sitter and Arch Linux
+
+Tree-sitter grammars live in `tree-sitter/` (not checked into git — rebuilt per machine). To rebuild all grammars:
+
+```bash
+rm ~/projects/emacs-again/tree-sitter/*.so
+emacs --batch --init-directory=~/projects/emacs-again -l init.el --eval '
+(progn (require (quote treesit-auto)) (treesit-auto-install-all))'
+```
+
+**Known incompatibility:** Emacs 30.2's `treesit.c` is incompatible with tree-sitter 0.26+ (predicate naming conflict — Emacs uses `#match`, tree-sitter 0.26 requires `#match?`, and both validate in C). As of 2026-04-09, this system runs `tree-sitter 0.25.10` + `emacs-wayland 30.2-1` with both pinned in `/etc/pacman.conf` `IgnorePkg`. If tree-sitter modes break after a system update, check `pacman -Qi tree-sitter` — if it's 0.26+, downgrade both packages and rebuild grammars. See memory file `tree-sitter-026-fix.md` for the full diagnosis and step-by-step fix.
+
 ## Jai and Tree-Sitter
 
 `jai-ts-mode.el` deliberately does **not** use tree-sitter. Jai's bracketed/unbracketed control flow variants (every control form has both `if x { }` and `if x stmt;` styles) cause the LR automaton state count to exceed tree-sitter's hard-coded 64K limit. Multiple serious attempts to build a complete grammar failed for this reason. The best available grammar (`overlord-systems/jai-tree-sitter`) only parses variable declarations and produces ERROR nodes for nearly all real code. Syntax highlighting uses regex font-lock instead.

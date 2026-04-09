@@ -97,6 +97,34 @@
 ;;;; Highlight current line.
 (global-hl-line-mode 1)
 
+;;;; Performance — skip unnecessary work on every redisplay cycle.
+;; Assume left-to-right text everywhere (skip bidi scanning).
+(setq-default bidi-display-reordering 'left-to-right
+              bidi-paragraph-direction 'left-to-right)
+(setq bidi-inhibit-bpa t)
+;; Defer fontification while typing — catches up instantly when idle.
+(setq redisplay-skip-fontification-on-input t)
+;; 4MB process output buffer — LSP servers routinely send large responses.
+(setq read-process-output-max (* 4 1024 1024))
+
+;;;; Kill ring sanity.
+;; Save clipboard content to kill ring before replacing it with a kill.
+(setq save-interprogram-paste-before-kill t)
+;; Don't store duplicate kills.
+(setq kill-do-not-save-duplicates t)
+
+;;;; Editing niceties.
+;; Auto-chmod files with shebang lines on save.
+(add-hook 'after-save-hook #'executable-make-buffer-file-executable-if-script-p)
+;; Never ping hostnames in find-file-at-point.
+(setq ffap-machine-p-known 'reject)
+;; re-builder: use string syntax (no double-escaping).
+(setq reb-re-syntax 'string)
+;; Auto-select help windows so you can read immediately.
+(setq help-window-select t)
+;; After first C-u C-SPC, keep pressing C-SPC to pop the mark ring.
+(setq set-mark-command-repeat-pop t)
+
 ;;;; Recent files.
 (use-package recentf
   :straight nil
@@ -115,7 +143,13 @@
   :custom
   (save-place-file (expand-file-name "saveplace" user-emacs-directory))
   :init
-  (save-place-mode 1))
+  (save-place-mode 1)
+  :config
+  ;; Recenter after restoring saved position so the cursor isn't at the
+  ;; bottom edge of the window.
+  (advice-add 'save-place-find-file-hook :after
+              (lambda (&rest _)
+                (when buffer-file-name (ignore-errors (recenter))))))
 
 ;;;; Per-instance server for external scripting (not daemon mode).
 ;; Each Emacs gets a unique server name based on its PID so external
@@ -236,6 +270,20 @@
 (use-package which-key
   :config
   (which-key-mode))
+
+;;;; Window management.
+;; Proportional resizing — all windows rebalance when splitting/deleting.
+(setq window-combination-resize t)
+;; Winner-mode: undo/redo window layouts.  C-x 1 toggles between
+;; single-window and the previous layout instead of being destructive.
+(winner-mode 1)
+(defun cm/toggle-delete-other-windows ()
+  "Delete other windows if any, or restore previous layout via winner-undo."
+  (interactive)
+  (if (equal (selected-window) (next-window))
+      (winner-undo)
+    (delete-other-windows)))
+(global-set-key (kbd "C-x 1") #'cm/toggle-delete-other-windows)
 
 ;;;; windmove — directional window navigation.
 (global-set-key (kbd "M-s-<left>") #'windmove-left)

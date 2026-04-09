@@ -1401,7 +1401,9 @@ With prefix argument REFRESH, rebuild completion cache first."
                         :files ("*.el" "data"))
   :hook (lean4-mode . (lambda () (setq-local indent-tabs-mode nil)))
   :custom
-  (lsp-lean4-lake-enabled t))
+  (lsp-lean4-lake-enabled t)
+  ;; Use corfu (via capf) instead of company-mode for completion.
+  (lsp-completion-provider :none))
 
 ;;;; Haskell.
 (use-package haskell-mode)

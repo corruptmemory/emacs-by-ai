@@ -53,7 +53,7 @@ Non-default eglot server entries are configured for: Odin (`ols`), Zig (`zls`), 
 
 Jai (`jails`) is commented out — the binary must be built manually from `~/projects/Jails`. Uncomment the `eglot-server-programs` entry and add `jai-ts-mode` back to the eglot hook list once it exists.
 
-Lean 4 uses **lsp-mode** (not eglot) via `lean4-mode` — this is the one exception to the eglot-everywhere pattern. lsp-mode is pulled in as a dependency and only activates in `.lean` buffers. The interactive Info-View (proof state / goals) requires lsp-mode's extension hooks. Requires `elan` toolchain manager (`~/.elan/bin` is on exec-path).
+Lean 4 uses **lsp-mode** (not eglot) via `lean4-mode` — this is the one exception to the eglot-everywhere pattern. lsp-mode is pulled in as a dependency and only activates in `.lean` buffers. The interactive Info-View (`C-c C-i` to toggle; shows proof state / goals) requires lsp-mode's extension hooks. `lsp-completion-provider` is set to `:none` so corfu handles completion via capf instead of company-mode. Requires `elan` toolchain manager (`~/.elan/bin` is on exec-path).
 
 ## Jai and Tree-Sitter
 

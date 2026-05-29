@@ -25,7 +25,7 @@ The file is organized in this order:
 
 1. **Startup/bootstrap** — timing display, straight.el bootstrap, use-package integration
 2. **Core settings** — custom file, local overrides, backups, auto-revert, delete-selection, electric-indent, electric-pair (auto-close + brace expansion on RET), tabs, performance (bidi off, skip fontification on input, 4MB process buffer), kill ring (clipboard preservation, dedup), editing niceties (auto-chmod scripts, no ffap pings, string re-builder syntax, auto-select help windows, repeat mark popping), recentf, saveplace (with recenter after restore), per-instance server (PID-named, stale socket cleanup)
-3. **PATH** — adds ~/.cargo/bin, ~/.local/bin, ~/.elan/bin, ~/go/bin, ~/projects/Odin, ~/projects/ols to exec-path
+3. **PATH** — adds ~/.cargo/bin, ~/.local/bin, ~/go/bin, ~/projects/Odin, ~/projects/ols to exec-path
 4. **Theme and fonts** — loads dracula-pro-blade, sets TX-02/Fira Sans/JoyPixels, auto-adjusts fringe contrast
 5. **Scrolling** — pixel-scroll-precision-mode with wheel/trackpad profiles driven by `cm/mouse-profile`; trackpad flips horizontal scroll and disables interpolated page scroll for instant PgUp/PgDn
 6. **Keybindings and editing** — winner-mode (layout undo/redo, reversible `C-x 1`), proportional window resizing, windmove, quick toggles (`C-c T` prefix), chunk word motion (`cm/` prefix), line movement, sexp navigation
@@ -52,8 +52,6 @@ All themes in `themes/` follow the standard Emacs pattern: `deftheme` → color 
 Non-default eglot server entries are configured for: Odin (`ols`), Zig (`zls`), go-templ (`templ lsp`), GLSL (`glslls`), Fish (`fish-lsp`), Haskell (`haskell-language-server-wrapper`), Harper (`harper-ls` — grammar/spell checking for org/markdown/text modes).
 
 Jai (`jails`) is commented out — the binary must be built manually from `~/projects/Jails`. Uncomment the `eglot-server-programs` entry and add `jai-ts-mode` back to the eglot hook list once it exists.
-
-Lean 4 uses **lsp-mode** (not eglot) via `lean4-mode` — this is the one exception to the eglot-everywhere pattern. lsp-mode is pulled in as a dependency and only activates in `.lean` buffers. The interactive Info-View (`C-c C-i` to toggle; shows proof state / goals) requires lsp-mode's extension hooks. `lsp-completion-provider` is set to `:none` so corfu handles completion via capf instead of company-mode. Requires `elan` toolchain manager (`~/.elan/bin` is on exec-path).
 
 ## Tree-Sitter and Arch Linux
 

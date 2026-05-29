@@ -25,9 +25,6 @@ tramp
 transient/
 custom.el
 
-# lsp-mode session state
-.lsp-session-v1
-
 # Misc artifacts
 .PKGINFO
 %backup%~

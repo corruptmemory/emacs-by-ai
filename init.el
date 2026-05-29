@@ -2040,6 +2040,23 @@ Call this interactively with \\[cm/ai-show-suggestions] or remotely via:
         (insert text))
       (diff orig-file sugg-file nil t))))
 
+;;;; claude-code-ide — editor-hosted, MCP-bridged Claude sessions.
+;; Spawns `claude' in a vterm buffer and runs a WebSocket MCP "ide" server
+;; Claude dials back into, exposing Emacs (xref/eglot, project, tree-sitter,
+;; imenu, Flymake diagnostics, ediff diff review, Elisp eval).  Editor-hosted
+;; and additive to the `cm/ai-*' exchange above: it spawns its own session
+;; rather than attaching to a terminal Claude — use -resume/-continue for that.
+(use-package claude-code-ide
+  :straight (:type git :host github :repo "manzaltu/claude-code-ide.el")
+  :bind ("C-c c" . claude-code-ide-menu)
+  :custom
+  (claude-code-ide-terminal-backend 'vterm)
+  :config
+  ;; Registers the built-in MCP tools and flips
+  ;; `claude-code-ide-enable-mcp-server' on internally.  executeCode stays t
+  ;; (default), so Claude can eval Elisp here; diagnostics auto-detect Flymake.
+  (claude-code-ide-emacs-tools-setup))
+
 ;;;; Keybinding cheat sheet (high-frequency).
 ;; Search/navigation:
 ;;   C-S-s   consult-line (region-seeded)
@@ -2062,6 +2079,9 @@ Call this interactively with \\[cm/ai-show-suggestions] or remotely via:
 ;;   C-c a a  accept AI suggestion
 ;;   C-c a d  diff current vs AI suggestion
 ;;   C-c a S  show *ai-suggestions* buffer (n/p/a/d/q)
+;;
+;; Claude Code IDE (editor-hosted, MCP-bridged):
+;;   C-c c    claude-code-ide-menu (start/toggle, send prompt, resume, sessions)
 ;;
 ;; AI writing assistant (remote — Claude Code calls via emacsclient -e):
 ;;   (cm/ai-current-context)         → JSON metadata for focused buffer

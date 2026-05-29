@@ -38,6 +38,7 @@ The file is organized in this order:
 13. **Dev tooling** — treesit-auto, yasnippet, eglot (20+ language hooks, autoreconnect, harper-ls for writing modes), eglot-booster, consult-eglot, eldoc-box, flymake, dape (DAP)
 14. **Language configs** — Go (format-on-save, gotest, dape/Delve wrappers with auto-breakpoint), SQL (xref helpers, completion), docker, pdf-tools, then all other languages
 15. **AI writing assistant** — `cm/ai-*` exchange protocol for Claude Code integration (`C-c a` prefix), shared via `~/.emacs-ai/`, interactive `*ai-suggestions*` review buffer (`C-c a S`)
+16. **Claude Code IDE** — editor-hosted Claude sessions via `claude-code-ide.el` (`C-c c` menu, vterm backend, full Emacs MCP tools + Elisp eval); complements the `cm/ai-*` exchange — see below
 
 ## Naming Conventions
 
@@ -115,3 +116,17 @@ For presenting multiple rewrite options, Claude Code writes `~/.emacs-ai/suggest
   }
 }
 ```
+
+## Claude Code IDE (editor-hosted — `claude-code-ide.el`)
+
+Editor-hosted Claude sessions via [`manzaltu/claude-code-ide.el`](https://github.com/manzaltu/claude-code-ide.el), wired into `init.el` right after the AI-writing-assistant section. `C-c c` opens the transient menu (`claude-code-ide-menu`).
+
+**This is the inverse of the `cm/ai-*` workflow above.** Here Emacs is the *parent*: `M-x claude-code-ide` spawns the `claude` CLI in a vterm buffer and runs a WebSocket MCP "ide" server that Claude dials back into, exposing Emacs to Claude — xref/eglot navigation, `project.el`, tree-sitter, imenu, Flymake diagnostics, `ediff`-based diff review, and Elisp evaluation. The session is tied to that Emacs instance and **cannot attach to a terminal-run Claude** (it always spawns its own); use the menu's resume/continue to reattach to a prior conversation after an ephemeral Emacs restarts. The two systems are complementary — `cm/ai-*` for the long-lived background session, `claude-code-ide` for in-editor IDE-aware sessions.
+
+Configuration (in `init.el`):
+- `claude-code-ide-terminal-backend` = `'vterm` — reuses the already-installed vterm (also the package default).
+- `(claude-code-ide-emacs-tools-setup)` registers the built-in MCP tools **and flips `claude-code-ide-enable-mcp-server` on internally** — calling it is sufficient; there is no separate variable to set.
+- `claude-code-ide-enable-execute-code` stays `t` (default): Claude can evaluate Elisp in the live session.
+- Diagnostics backend is `'auto` → detects Flymake.
+
+**Unrelated to Claude Code's `mcp__*` allow-list:** this package's WebSocket "ide" MCP server is auto-registered per session by the `claude` CLI; it is not one of the client MCP servers configured in `.claude/settings.local.json`.

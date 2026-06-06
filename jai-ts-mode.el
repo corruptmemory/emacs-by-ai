@@ -21,6 +21,32 @@
     table)
   "Syntax table for `jai-ts-mode'.")
 
+(defvar jai-ts-mode--imenu-generic-expression
+  '(("Procedures"
+     "^\\([A-Za-z_][A-Za-z0-9_]*\\)[ \t]*::[ \t]*\\(?:inline[ \t]+\\)?(" 1)
+    ("Operators"
+     "^\\(operator[ \t]*[^ \t:]+\\)[ \t]*::[ \t]*(" 1)
+    ("Structs"
+     "^\\([A-Za-z_][A-Za-z0-9_]*\\)[ \t]*::[ \t]*struct\\b" 1)
+    ("Enums"
+     "^\\([A-Za-z_][A-Za-z0-9_]*\\)[ \t]*::[ \t]*enum\\(?:_flags\\)?\\b" 1)
+    ("Unions"
+     "^\\([A-Za-z_][A-Za-z0-9_]*\\)[ \t]*::[ \t]*union\\b" 1)
+    ("Constants"
+     "^\\([A-Z][A-Z0-9_]*\\)[ \t]*::[ \t]*[^( \t\n]" 1))
+  "Imenu patterns for Jai top-level (column-0) `::' declarations.
+
+Routing is by the token after `::'.  Categories stay mutually exclusive in
+idiomatic Jai because of naming conventions: procedures are snake_case,
+types are Title_Case, constants are SCREAMING_SNAKE_CASE (so the all-caps
+Constants pattern can never consume a Title_Case type name up to `::').
+
+Caveat: an all-caps *type* (e.g. a C-binding `LARGE_INTEGER :: union') will
+appear under both its type group and Constants.  Emacs regex lacks negative
+lookahead, and excluding it via the RHS would also drop legitimate
+lowercase-RHS constants such as `COLOR_SCHEMES :: float.[...]'.  Idiomatic
+Jai uses Title_Case type names, so this does not trigger in practice.")
+
 ;;;###autoload
 (define-derived-mode jai-ts-mode prog-mode "Jai"
   "Major mode for editing Jai source.
@@ -37,7 +63,13 @@ eglot and the jails language server."
               indent-tabs-mode    nil)
   ;; Basic regex font-lock — good enough given tree-sitter can't help here.
   (setq-local font-lock-defaults
-              '((jai-ts-mode--font-lock-keywords) nil nil nil nil)))
+              '((jai-ts-mode--font-lock-keywords) nil nil nil nil))
+  ;; Regex-based imenu (M-g i / consult-imenu).  Tree-sitter can't index Jai
+  ;; (see header), so symbols come from column-0 `::' declarations.  Jai is
+  ;; case-sensitive, so case folding is disabled here — that is what keeps
+  ;; SCREAMING_CASE constants distinct from Title_Case type names.
+  (setq-local imenu-generic-expression jai-ts-mode--imenu-generic-expression
+              imenu-case-fold-search    nil))
 
 (defvar jai-ts-mode--font-lock-keywords
   (let ((keywords  '("if" "else" "while" "for" "return" "break" "continue"

@@ -42,5 +42,26 @@
                    (split-string (buffer-string) "\n" t))))
       (should (equal (cl-count abbr lines :test #'equal) 1)))))
 
+(ert-deftest cm/eglot--prefer-lsp-when-capable ()
+  (cl-letf (((symbol-function 'eglot-managed-p) (lambda () t))
+            ((symbol-function 'eglot-server-capable) (lambda (&rest _) t)))
+    (let ((current-prefix-arg nil))
+      (should (eq 'lsp (cm/eglot--prefer :x (lambda () 'lsp) (lambda () 'fb)))))))
+
+(ert-deftest cm/eglot--prefer-fallback-when-unmanaged ()
+  (cl-letf (((symbol-function 'eglot-managed-p) (lambda () nil)))
+    (should (eq 'fb (cm/eglot--prefer :x (lambda () 'lsp) (lambda () 'fb))))))
+
+(ert-deftest cm/eglot--prefer-prefix-forces-fallback ()
+  (cl-letf (((symbol-function 'eglot-managed-p) (lambda () t))
+            ((symbol-function 'eglot-server-capable) (lambda (&rest _) t)))
+    (let ((current-prefix-arg '(4)))
+      (should (eq 'fb (cm/eglot--prefer :x (lambda () 'lsp) (lambda () 'fb)))))))
+
+(ert-deftest cm/eglot--prefer-user-error-falls-back ()
+  (cl-letf (((symbol-function 'eglot-managed-p) (lambda () t))
+            ((symbol-function 'eglot-server-capable) (lambda (&rest _) t)))
+    (should (eq 'fb (cm/eglot--prefer :x (lambda () (user-error "none")) (lambda () 'fb))))))
+
 (provide 'cm-project-roots-tests)
 ;;; cm-project-roots-tests.el ends here

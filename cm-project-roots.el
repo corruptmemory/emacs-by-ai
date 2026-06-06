@@ -95,5 +95,16 @@ No-op when DIR is already listed."
   (interactive)
   (find-file (expand-file-name cm/project-roots-file (cm/project--primary-root))))
 
+(defun cm/eglot--prefer (capability thunk fallback)
+  "Run THUNK if Eglot manages the buffer and the server has CAPABILITY,
+falling back to FALLBACK when THUNK finds nothing (signals `user-error').
+A prefix argument forces FALLBACK."
+  (if (and (not current-prefix-arg)
+           (fboundp 'eglot-managed-p) (eglot-managed-p)
+           (eglot-server-capable capability))
+      (condition-case nil (funcall thunk)
+        (user-error (funcall fallback)))
+    (funcall fallback)))
+
 (provide 'cm-project-roots)
 ;;; cm-project-roots.el ends here

@@ -1422,17 +1422,21 @@ With prefix argument REFRESH, rebuild completion cache first."
 ;;;; Markdown.
 ;; Pretty GitHub-style preview via cmark-gfm.  Output is wrapped in
 ;; <article class="markdown-body"> so sindresorhus/github-markdown-css
-;; (every rule scoped to .markdown-body) actually applies.
-;; Per-machine CSS install:
-;;   mkdir -p ~/.local/share/markdown && \
-;;     curl -fsSL https://raw.githubusercontent.com/sindresorhus/github-markdown-css/main/github-markdown.css \
-;;     -o ~/.local/share/markdown/github-markdown.css
+;; (every rule scoped to .markdown-body) actually applies.  The CSS is
+;; vendored under vendor/ and its path is resolved from
+;; user-emacs-directory — no per-machine install needed.  To refresh
+;; the vendored copy from upstream, run from the repo root:
+;;   curl -fsSL https://raw.githubusercontent.com/sindresorhus/github-markdown-css/main/github-markdown.css \
+;;     -o vendor/github-markdown.css
 (use-package markdown-mode
   :mode ("\\.md\\'" . gfm-mode)
   :custom
   (markdown-fontify-code-blocks-natively t)
   (markdown-command "cmark-gfm -e table -e strikethrough -e autolink -e tasklist")
-  (markdown-css-paths '("file:///home/jim/.local/share/markdown/github-markdown.css"))
+  (markdown-css-paths
+   (list (concat "file://"
+                 (expand-file-name "vendor/github-markdown.css"
+                                   user-emacs-directory))))
   (markdown-xhtml-header-content
    "<style>
 .markdown-body {

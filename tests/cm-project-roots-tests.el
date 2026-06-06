@@ -63,5 +63,15 @@
             ((symbol-function 'eglot-server-capable) (lambda (&rest _) t)))
     (should (eq 'fb (cm/eglot--prefer :x (lambda () (user-error "none")) (lambda () 'fb))))))
 
+(ert-deftest cm/project-find-file--candidates-spans-roots ()
+  (skip-unless (executable-find "rg"))
+  (let* ((a (file-name-as-directory (make-temp-file "cmpr-a" t)))
+         (b (file-name-as-directory (make-temp-file "cmpr-b" t))))
+    (with-temp-file (expand-file-name "alpha.txt" a) (insert "x"))
+    (with-temp-file (expand-file-name "beta.txt" b) (insert "y"))
+    (let ((files (cm/project-find-file--candidates (list a b))))
+      (should (cl-some (lambda (f) (string-suffix-p "alpha.txt" f)) files))
+      (should (cl-some (lambda (f) (string-suffix-p "beta.txt" f)) files)))))
+
 (provide 'cm-project-roots-tests)
 ;;; cm-project-roots-tests.el ends here

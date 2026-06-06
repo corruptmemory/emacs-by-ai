@@ -106,5 +106,20 @@ A prefix argument forces FALLBACK."
         (user-error (funcall fallback)))
     (funcall fallback)))
 
+(defun cm/project-find-file--candidates (roots)
+  "Return absolute file paths under ROOTS via `rg --files' (respects .gitignore)."
+  (when roots
+    (apply #'process-lines-ignore-status
+           "rg" "--files" "--color=never"
+           (mapcar #'expand-file-name roots))))
+
+(defun cm/project-find-file-all-roots ()
+  "Find a file by name across all project roots."
+  (interactive)
+  (let ((files (cm/project-find-file--candidates (cm/project-roots))))
+    (unless files (user-error "No files found across project roots"))
+    (find-file (consult--read files :prompt "Find file (all roots): "
+                              :category 'file :require-match t :sort nil))))
+
 (provide 'cm-project-roots)
 ;;; cm-project-roots.el ends here

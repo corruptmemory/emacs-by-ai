@@ -13,5 +13,24 @@
             "# full comment\n\n/abs/dir\nrel/dir\n~/home-dir  # trailing\n" "/base")
            (list "/abs/dir" "/base/rel/dir" (expand-file-name "~/home-dir")))))
 
+(defun cm/test--make-tree ()
+  "Create a temp project tree; return its root dir (absolute, slash-terminated)."
+  (let* ((root (file-name-as-directory (make-temp-file "cmpr" t))))
+    (make-directory (expand-file-name "extra" root))
+    (with-temp-file (expand-file-name ".project-roots" root)
+      (insert "extra\nnonexistent-dir\n"))
+    root))
+
+(ert-deftest cm/project-roots--from-file-skips-missing ()
+  (let* ((root (cm/test--make-tree))
+         (got (cm/project-roots--from-file (expand-file-name ".project-roots" root))))
+    (should (member (file-name-as-directory root) got))
+    (should (member (file-name-as-directory (expand-file-name "extra" root)) got))
+    (should-not (member (file-name-as-directory (expand-file-name "nonexistent-dir" root)) got))))
+
+(ert-deftest cm/project-roots-falls-back-without-file ()
+  (let ((default-directory temporary-file-directory))
+    (should (= 1 (length (cm/project-roots))))))
+
 (provide 'cm-project-roots-tests)
 ;;; cm-project-roots-tests.el ends here

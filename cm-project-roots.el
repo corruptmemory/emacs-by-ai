@@ -33,5 +33,31 @@ Pure: performs no filesystem access."
           (push (expand-file-name s base-dir) dirs))))
     (nreverse dirs)))
 
+(defun cm/project-roots--from-file (file)
+  "Return the primary root (FILE's directory) plus existing declared roots.
+Nonexistent declared dirs are skipped with a `message' warning."
+  (let* ((base (file-name-as-directory (file-name-directory (expand-file-name file))))
+         (declared (cm/project-roots--parse
+                    (with-temp-buffer (insert-file-contents file) (buffer-string))
+                    base))
+         (roots (list base)))
+    (dolist (d declared)
+      (if (file-directory-p d)
+          (push (file-name-as-directory d) roots)
+        (message "cm/project-roots: skipping missing dir %s" d)))
+    (delete-dups (nreverse roots))))
+
+(defun cm/project-roots ()
+  "Return the list of root directories for the current multi-root project.
+If a `.project-roots' file dominates `default-directory', return its
+primary root plus the existing declared roots.  Otherwise degrade to the
+current project root, or `default-directory'."
+  (if-let* ((dir (locate-dominating-file default-directory cm/project-roots-file)))
+      (cm/project-roots--from-file (expand-file-name cm/project-roots-file dir))
+    (list (file-name-as-directory
+           (expand-file-name
+            (if-let* ((proj (project-current))) (project-root proj)
+              default-directory))))))
+
 (provide 'cm-project-roots)
 ;;; cm-project-roots.el ends here

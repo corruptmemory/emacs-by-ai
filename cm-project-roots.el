@@ -21,5 +21,17 @@
 (defconst cm/project-roots-file ".project-roots"
   "Name of the file (at the primary project root) listing extra roots.")
 
+(defun cm/project-roots--parse (text base-dir)
+  "Parse TEXT (a `.project-roots' file body) into a list of absolute dirs.
+Lines beginning with or containing `#' are comment-stripped; blank lines
+are dropped; `~' expands; relative entries resolve against BASE-DIR.
+Pure: performs no filesystem access."
+  (let (dirs)
+    (dolist (line (split-string text "\n"))
+      (let ((s (string-trim (replace-regexp-in-string "#.*\\'" "" line))))
+        (unless (string-empty-p s)
+          (push (expand-file-name s base-dir) dirs))))
+    (nreverse dirs)))
+
 (provide 'cm-project-roots)
 ;;; cm-project-roots.el ends here

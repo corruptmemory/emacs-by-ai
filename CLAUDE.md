@@ -52,7 +52,7 @@ All themes in `themes/` follow the standard Emacs pattern: `deftheme` → color 
 
 Non-default eglot server entries are configured for: Odin (`ols`), Zig (`zls`), go-templ (`templ lsp`), GLSL (`glslls`), Fish (`fish-lsp`), Haskell (`haskell-language-server-wrapper`), Harper (`harper-ls` — grammar/spell checking for org/markdown/text modes).
 
-Jai (`jails`) is commented out — the binary must be built manually from `~/projects/Jails`. Uncomment the `eglot-server-programs` entry and add `jai-ts-mode` back to the eglot hook list once it exists.
+Jai (`jails`) is **intentionally left unwired**, even though the `jails` binary is now installed (`~/.local/bin/jails`) and a `jails.json` exists in `~/projects/game-bootstrap`. jails is flakey and slow and tends to drop code navigation entirely when it breaks; the preferred setup is graceful degradation over an unreliable LSP — `jai-ts-mode` regex font-lock + `dumb-jump` + the `C-c w` multi-root grep commands (see "Multi-root project search" below), which lands in the "good enough" zone. Do **not** uncomment the `eglot-server-programs` entry or add `jai-ts-mode` to the eglot hook list.
 
 ## Tree-Sitter and Arch Linux
 

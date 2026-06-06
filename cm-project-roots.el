@@ -59,5 +59,41 @@ current project root, or `default-directory'."
             (if-let* ((proj (project-current))) (project-root proj)
               default-directory))))))
 
+(defun cm/project-add-root--append (file dir)
+  "Append DIR (abbreviated, slash-terminated) to FILE; create FILE if absent.
+No-op when DIR is already listed."
+  (let* ((abbr (abbreviate-file-name (file-name-as-directory (expand-file-name dir))))
+         (lines (and (file-exists-p file)
+                     (with-temp-buffer (insert-file-contents file)
+                       (mapcar #'string-trim
+                               (split-string (buffer-string) "\n" t))))))
+    (unless (member abbr lines)
+      (with-temp-buffer
+        (when (file-exists-p file) (insert-file-contents file))
+        (goto-char (point-max))
+        (unless (or (bobp) (bolp)) (insert "\n"))
+        (insert abbr "\n")
+        (write-region (point-min) (point-max) file)))))
+
+(defun cm/project--primary-root ()
+  "Return the directory that should hold this project's `.project-roots'."
+  (file-name-as-directory
+   (expand-file-name
+    (or (locate-dominating-file default-directory cm/project-roots-file)
+        (when-let* ((proj (project-current))) (project-root proj))
+        default-directory))))
+
+(defun cm/project-add-root (dir)
+  "Add DIR to this project's `.project-roots' (\"Add Folder to Project\")."
+  (interactive "DAdd folder to project: ")
+  (cm/project-add-root--append
+   (expand-file-name cm/project-roots-file (cm/project--primary-root)) dir)
+  (message "Added %s to project roots" (abbreviate-file-name dir)))
+
+(defun cm/project-edit-roots ()
+  "Open this project's `.project-roots' file for editing."
+  (interactive)
+  (find-file (expand-file-name cm/project-roots-file (cm/project--primary-root))))
+
 (provide 'cm-project-roots)
 ;;; cm-project-roots.el ends here

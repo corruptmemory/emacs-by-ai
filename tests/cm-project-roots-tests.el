@@ -32,5 +32,15 @@
   (let ((default-directory temporary-file-directory))
     (should (= 1 (length (cm/project-roots))))))
 
+(ert-deftest cm/project-add-root--append-dedups ()
+  (let* ((file (make-temp-file "cmpr-roots"))
+         (dir  (file-name-as-directory (make-temp-file "cmpr-d" t)))
+         (abbr (abbreviate-file-name dir)))
+    (cm/project-add-root--append file dir)
+    (cm/project-add-root--append file dir) ; second add must be a no-op
+    (let ((lines (with-temp-buffer (insert-file-contents file)
+                   (split-string (buffer-string) "\n" t))))
+      (should (equal (cl-count abbr lines :test #'equal) 1)))))
+
 (provide 'cm-project-roots-tests)
 ;;; cm-project-roots-tests.el ends here

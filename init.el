@@ -1420,10 +1420,34 @@ With prefix argument REFRESH, rebuild completion cache first."
 ;; cmake-ts-mode is built-in; cmake-language-server is eglot's default.
 
 ;;;; Markdown.
+;; Pretty GitHub-style preview via cmark-gfm.  Output is wrapped in
+;; <article class="markdown-body"> so sindresorhus/github-markdown-css
+;; (every rule scoped to .markdown-body) actually applies.
+;; Per-machine CSS install:
+;;   mkdir -p ~/.local/share/markdown && \
+;;     curl -fsSL https://raw.githubusercontent.com/sindresorhus/github-markdown-css/main/github-markdown.css \
+;;     -o ~/.local/share/markdown/github-markdown.css
 (use-package markdown-mode
   :mode ("\\.md\\'" . gfm-mode)
   :custom
-  (markdown-fontify-code-blocks-natively t))
+  (markdown-fontify-code-blocks-natively t)
+  (markdown-command "cmark-gfm -e table -e strikethrough -e autolink -e tasklist")
+  (markdown-css-paths '("file:///home/jim/.local/share/markdown/github-markdown.css"))
+  (markdown-xhtml-header-content
+   "<style>
+.markdown-body {
+  box-sizing: border-box;
+  min-width: 200px;
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 45px;
+}
+@media (max-width: 767px) {
+  .markdown-body { padding: 15px; }
+}
+</style>")
+  (markdown-xhtml-body-preamble "<article class=\"markdown-body\">")
+  (markdown-xhtml-body-epilogue "</article>"))
 
 ;;;; JavaScript / TypeScript.
 ;; js-ts-mode, typescript-ts-mode, tsx-ts-mode are built-in.

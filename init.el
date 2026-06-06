@@ -2056,6 +2056,10 @@ Call this interactively with \\[cm/ai-show-suggestions] or remotely via:
 ;;   M-s g   consult-git-grep (region-seeded)
 ;;   M-g e   consult-compile-error
 ;;
+;; Multi-root project ("add folder to project"):
+;;   C-c w s/r/f/j  search / refs / find-file / jump-to-def across roots
+;;   C-c w a/e      add folder / edit .project-roots
+;;
 ;; Actions/completion:
 ;;   C-.     embark-act
 ;;   C-;     embark-dwim

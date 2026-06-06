@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Personal Emacs configuration. Requires Emacs 29+. No build system or tests — the `.el` files are loaded directly by Emacs. Test changes with:
+Personal Emacs configuration. Requires Emacs 29+. No build system. Most `.el` files are loaded directly by Emacs; `cm-project-roots.el` has an ERT suite under `tests/` (run `./tests/run-tests.sh`). Test changes with:
 
 ```sh
 emacs --init-directory=~/projects/emacs-again/
@@ -38,6 +38,7 @@ The file is organized in this order:
 13. **Dev tooling** — treesit-auto, yasnippet, eglot (20+ language hooks, autoreconnect, harper-ls for writing modes), eglot-booster, consult-eglot, eldoc-box, flymake, dape (DAP)
 14. **Language configs** — Go (format-on-save, gotest, dape/Delve wrappers with auto-breakpoint), SQL (xref helpers, completion), docker, pdf-tools, then all other languages
 15. **AI writing assistant** — `cm/ai-*` exchange protocol for Claude Code integration (`C-c a` prefix), shared via `~/.emacs-ai/`, interactive `*ai-suggestions*` review buffer (`C-c a S`)
+16. **Multi-root project search** — `cm-project-roots.el` (loaded after the consult-eglot block): opt-in `C-c w` commands spanning dirs listed in a `.project-roots` file; LSP-first jump/refs, rg-based search/find-file; see below
 
 ## Naming Conventions
 
@@ -115,3 +116,14 @@ For presenting multiple rewrite options, Claude Code writes `~/.emacs-ai/suggest
   }
 }
 ```
+
+## Multi-root project search ("Add Folder to Project")
+
+`cm-project-roots.el` (a sibling library loaded from `init.el`, like `jai-ts-mode.el`) adds opt-in commands that run search/navigation across directories listed in a `.project-roots` file at the primary project root. The primary root is implicit; extra dirs are one-per-line (`#` comments, `~`/relative allowed, missing dirs skipped with a warning). `cm/project-roots` is the single source of truth all commands read.
+
+- `C-c w s` / `r` / `f` / `j` — search / references / find-file / jump-to-definition across all roots.
+- `C-c w a` / `e` — add a folder (`cm/project-add-root`) / edit `.project-roots`.
+- **LSP-first**: jump (`:definitionProvider`) and references (`:referencesProvider`) prefer Eglot when the buffer is managed and the server is capable, falling back to multi-root dumb-jump / ripgrep otherwise. `C-u` forces the fallback. Search and find-file are always ripgrep-based (LSP has no equivalent).
+- Existing single-root commands are untouched (the feature is purely additive).
+
+Tests: ERT suite under `tests/`, run with `./tests/run-tests.sh` (integration tests `skip-unless` `rg`/`dumb-jump` are present). Design + plan: `docs/plans/2026-06-06-multi-root-project-design.md` and `…-plan.md`.

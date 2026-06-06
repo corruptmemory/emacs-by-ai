@@ -96,6 +96,21 @@ Claude Code can also query Emacs state directly via `emacsclient -s <server> -e`
 
 For saved files, Claude Code can edit directly — `global-auto-revert-mode` picks up changes.
 
+## Multi-root project (Add Folder to Project)
+
+Opt-in commands that run search and navigation across directories listed in a `.project-roots` file at the primary project root — like Sublime Text / Zed's *Add Folder to Project*. The primary root is implicit; list extra directories one per line (`#` comments and `~`/relative paths allowed). Jump-to-definition and references prefer Eglot when a language server is available and fall back to a multi-root grep/dumb-jump search; plain search and find-file are always ripgrep-based. Existing single-root commands (`M-.`, `C-c s`, …) are untouched.
+
+| Key | Action |
+|-----|--------|
+| `C-c w s` | Search (ripgrep) across all roots |
+| `C-c w r` | Find references across all roots (LSP-first) |
+| `C-c w f` | Find file by name across all roots |
+| `C-c w j` | Jump to definition across all roots (LSP-first) |
+| `C-c w a` | Add a folder to the project (appends to `.project-roots`) |
+| `C-c w e` | Edit `.project-roots` |
+
+`C-u` before `j`/`r` forces the grep/dumb-jump fallback (skips Eglot). Implemented in `cm-project-roots.el`; ERT tests under `tests/` (`./tests/run-tests.sh`).
+
 ## Additional packages
 
 - **vterm** — full terminal emulator inside Emacs (fish shell, 10k scrollback)

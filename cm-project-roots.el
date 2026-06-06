@@ -189,5 +189,14 @@ Dedupes on (:path . :line).  SYMBOL defaults to the symbol at point."
    (lambda () (call-interactively #'xref-find-definitions))
    #'cm/project-jump-def--present))
 
+(defvar-keymap cm/project-roots-prefix-map
+  :doc "Multi-root project (\"add folder to project\") commands."
+  "s" #'cm/project-search-all-roots
+  "r" #'cm/project-refs-all-roots
+  "f" #'cm/project-find-file-all-roots
+  "j" #'cm/project-jump-def-all-roots
+  "a" #'cm/project-add-root
+  "e" #'cm/project-edit-roots)
+
 (provide 'cm-project-roots)
 ;;; cm-project-roots.el ends here

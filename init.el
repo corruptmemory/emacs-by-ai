@@ -972,6 +972,12 @@ Valid entries must have a regexp string as their car."
   :bind (:map eglot-mode-map
               ("C-c e s" . consult-eglot-symbols)))
 
+;;;; Multi-root project ("add folder to project") — see cm-project-roots.el.
+;; Opt-in commands that span directories listed in a .project-roots file at the
+;; primary project root.  LSP-first for jump/refs; rg-based for search/find-file.
+(when (load (locate-user-emacs-file "cm-project-roots") t)
+  (global-set-key (kbd "C-c w") cm/project-roots-prefix-map))
+
 ;;;; eldoc-box — floating documentation at point.
 (use-package eldoc-box
   :after eglot

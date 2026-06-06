@@ -1140,6 +1140,25 @@ if one isn't already set there."
 ;;;; GLSL.
 (use-package glsl-mode)
 
+;;;; Slang (shader language) — purpose-built major mode + optional slangd LSP.
+;; Highlight/indent/imenu work with no LSP; `slang-lsp' attaches `slangd' only
+;; when it is found on PATH, so this is safe to load before slangd is installed
+;; (install shader-slang-bin or drop slangd in ~/.local/bin to light it up).
+(use-package slang-mode
+  :straight (:host github :repo "K1ngst0m/slang-mode")
+  :mode (("\\.slang\\'" . slang-mode)
+         ("\\.slangh\\'" . slang-mode))
+  :config
+  (require 'slang-lsp)
+  (slang-lsp-initialize)
+  ;; `slang-lsp-initialize' reaches into eglot GLOBALLY: it adds `flymake' to
+  ;; `eglot-stay-out-of' (which would suppress eglot's flymake diagnostics in
+  ;; EVERY language), plus sets `eglot-autoshutdown' t and
+  ;; `eglot-events-buffer-size' 0.  Undo the harmful flymake one so eglot
+  ;; diagnostics keep working everywhere, Slang included.
+  (with-eval-after-load 'eglot
+    (setq eglot-stay-out-of (delq 'flymake eglot-stay-out-of))))
+
 ;;;; SQL.
 ;; SQL buffers should always indent with spaces, never literal tabs.
 (setq sql-product 'postgres)

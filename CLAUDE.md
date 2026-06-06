@@ -54,6 +54,8 @@ Non-default eglot server entries are configured for: Odin (`ols`), Zig (`zls`), 
 
 Jai (`jails`) is **intentionally left unwired**, even though the `jails` binary is now installed (`~/.local/bin/jails`) and a `jails.json` exists in `~/projects/game-bootstrap`. jails is flakey and slow and tends to drop code navigation entirely when it breaks; the preferred setup is graceful degradation over an unreliable LSP — `jai-ts-mode` regex font-lock + `dumb-jump` + the `C-c w` multi-root grep commands (see "Multi-root project search" below), which lands in the "good enough" zone. Do **not** uncomment the `eglot-server-programs` entry or add `jai-ts-mode` to the eglot hook list.
 
+Slang (`slangd`, shader-slang.org) uses [`K1ngst0m/slang-mode`](https://github.com/K1ngst0m/slang-mode) — a purpose-built major mode (regex font-lock + indent + imenu) plus its `slang-lsp.el`, which auto-registers `slangd` with eglot **only when it is found on `PATH`** (install via AUR `shader-slang-bin`, symlinked into `~/.local/bin`). Two gotchas are baked into the `init.el` block: (1) `slang-lsp-initialize` mutates eglot *globally* — it adds `flymake` to `eglot-stay-out-of` (which would suppress eglot's flymake diagnostics in **every** language), so the config `delq`s it back out; (2) hover needs a recent eglot — `emacs-straight/eglot` 1.23 at commit `3371f2b` shipped a `gfm-extract` markup-render bug (`invalid-function #'gfm-extract`), fixed by `straight-pull-package eglot` (≥ `3c64b09`). The mode's floor works with no LSP; `C-c w r` multi-root grep covers references (which `slangd` can't do yet).
+
 ## Tree-Sitter and Arch Linux
 
 Tree-sitter grammars live in `tree-sitter/` (not checked into git — rebuilt per machine). To rebuild all grammars:

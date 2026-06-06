@@ -32,7 +32,7 @@ Vertico + Orderless + Consult + Marginalia + Embark in the minibuffer; Corfu + C
 
 ## LSP
 
-Eglot (built-in) with eglot-booster for performance and autoreconnect on server crashes. Hooks are wired for 20+ language modes. Custom LSP server entries for Odin (`ols`), Zig (`zls`), Jai (`jails`), go-templ, GLSL, Fish, Haskell, and Harper (grammar/spell checking for writing modes). xref-union combines Eglot's xref backend with dumb-jump as a fallback in non-LSP buffers.
+Eglot (built-in) with eglot-booster for performance and autoreconnect on server crashes. Hooks are wired for 20+ language modes. Custom LSP server entries for Odin (`ols`), Zig (`zls`), Jai (`jails`), go-templ, GLSL, Fish, Haskell, Slang (`slangd`, via `slang-mode`), and Harper (grammar/spell checking for writing modes). xref-union combines Eglot's xref backend with dumb-jump as a fallback in non-LSP buffers.
 
 ## Debugging
 
@@ -148,6 +148,7 @@ Run `M-x all-the-icons-install-fonts` once after first install for icon support.
 | `ols`                             | Odin LSP                                          |
 | `zls`                             | Zig LSP                                           |
 | `jails`                           | Jai LSP (~/projects/Jails/bin/jails)              |
+| `slangd`                          | Slang shader LSP (AUR `shader-slang-bin`)         |
 | `haskell-language-server-wrapper` | Haskell LSP                                       |
 | `bash-language-server`            | Bash LSP                                          |
 | `fish-lsp`                        | Fish LSP                                          |

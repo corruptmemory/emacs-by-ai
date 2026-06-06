@@ -16,6 +16,7 @@ emacs --init-directory=~/projects/emacs-again/
 - `init.el` — Package management (straight.el + use-package), all packages, keybindings, language configs
 - `jai-ts-mode.el` — Jai major mode (regex font-lock + syntax table; tree-sitter intentionally not used — see below)
 - `themes/` — Custom color themes (Dracula Pro Blade/Pro, Naysayer)
+- `vendor/` — Upstream assets vendored as plain text, refreshed on demand (currently: `github-markdown.css` for the markdown preview)
 - `local-settings.el` — Machine-specific overrides (git-ignored); sets `cm/mouse-profile` etc.
 - `scripts/emacs-send` — Shell script for sending files/commands to a running Emacs instance (self-installs via `--install`)
 
@@ -129,3 +130,21 @@ For presenting multiple rewrite options, Claude Code writes `~/.emacs-ai/suggest
 - Existing single-root commands are untouched (the feature is purely additive).
 
 Tests: ERT suite under `tests/`, run with `./tests/run-tests.sh` (integration tests `skip-unless` `rg`/`dumb-jump` are present). Design + plan: `docs/plans/2026-06-06-multi-root-project-design.md` and `…-plan.md`.
+
+## Markdown preview
+
+`C-c C-c p` in a `.md` buffer renders via `cmark-gfm` (GFM extensions: tables, strikethrough, autolinks, tasklists) and opens the HTML in the browser. Output is wrapped in `<article class="markdown-body">…</article>` — that wrapper is the load-bearing contract that connects [sindresorhus/github-markdown-css](https://github.com/sindresorhus/github-markdown-css) (every rule scoped to `.markdown-body`) to the rendered HTML. Without it, the linked stylesheet matches nothing. The CSS is vendored at `vendor/github-markdown.css` and its `file://` URL is computed from `user-emacs-directory` inside the `markdown-mode` `:custom` block, so a fresh clone needs no install step. Refresh from upstream:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/sindresorhus/github-markdown-css/main/github-markdown.css \
+  -o vendor/github-markdown.css
+```
+
+### Nested fences
+
+CommonMark closes an N-backtick fence on the next line of M ≥ N matching backticks (with up to 3 spaces of leading indent allowed on the closer). A markdown document that contains *another* markdown sample with its own ``` fences inside therefore cannot use a 3-backtick outer — the first inner closer will end the outer block prematurely. Two workarounds, both supported by `cmark-gfm` and `markdown-mode`:
+
+- **4-backtick outer fence** (e.g. ` ````markdown … ```` `) — visually consistent with the surrounding 3-backtick fences.
+- **Tilde outer fence** (`~~~markdown … ~~~`) — distinct fence character, never interacts with backtick content regardless of count. Useful when you want a visible distinction between "container" and "contained" rather than a different number of the same character.
+
+Inner content with `~~~` lines would similarly break a tilde outer; the escalation pattern generalizes — use N+1 of whichever character your inner content doesn't already use.

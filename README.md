@@ -18,6 +18,7 @@ On first launch, `straight.el` bootstraps itself and installs all packages. Tree
 | `init.el`           | Everything else: packages, keybindings, language configs                |
 | `themes/`           | Custom color themes (Dracula Pro Blade, Dracula Pro Pro, Naysayer)      |
 | `snippets/`         | User-defined yasnippet/tempel snippets                                  |
+| `vendor/`           | Vendored upstream assets (currently: `github-markdown.css` for preview) |
 | `local-settings.el` | Machine-specific overrides (git-ignored)                                |
 | `custom.el`         | Emacs customize output (git-ignored)                                    |
 | `scripts/emacs-send`| Send files/commands to a running Emacs (`--install` to symlink)         |
@@ -111,6 +112,15 @@ Opt-in commands that run search and navigation across directories listed in a `.
 
 `C-u` before `j`/`r` forces the grep/dumb-jump fallback (skips Eglot). Implemented in `cm-project-roots.el`; ERT tests under `tests/` (`./tests/run-tests.sh`).
 
+## Markdown preview
+
+`C-c C-c p` in any `.md` buffer opens a GitHub-styled HTML preview in the browser, rendered through [`cmark-gfm`](https://github.com/github/cmark-gfm) with GFM extensions (tables, strikethrough, autolinks, tasklists). The stylesheet is [`sindresorhus/github-markdown-css`](https://github.com/sindresorhus/github-markdown-css), vendored at `vendor/github-markdown.css` and resolved at runtime from `user-emacs-directory` — cloning the repo is the whole install. Refresh the vendored copy from upstream:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/sindresorhus/github-markdown-css/main/github-markdown.css \
+  -o vendor/github-markdown.css
+```
+
 ## Additional packages
 
 - **vterm** — full terminal emulator inside Emacs (fish shell, 10k scrollback)
@@ -153,6 +163,7 @@ Run `M-x all-the-icons-install-fonts` once after first install for icon support.
 | `bash-language-server`            | Bash LSP                                          |
 | `fish-lsp`                        | Fish LSP                                          |
 | `aspell` or `hunspell`            | flyspell spell checking                           |
+| `cmark-gfm`                       | Markdown preview (`pacman -S cmark-gfm` on Arch)  |
 | `cmake`, `libtool`, C compiler    | vterm module compilation (first use)              |
 | `poppler` (dev libs)              | pdf-tools `epdfinfo` build (first use)            |
 | `docker`                          | docker.el container/image management              |

@@ -38,7 +38,6 @@ The file is organized in this order:
 13. **Dev tooling** — treesit-auto, yasnippet, eglot (20+ language hooks, autoreconnect, harper-ls for writing modes), eglot-booster, consult-eglot, eldoc-box, flymake, dape (DAP)
 14. **Language configs** — Go (format-on-save, gotest, dape/Delve wrappers with auto-breakpoint), SQL (xref helpers, completion), docker, pdf-tools, then all other languages
 15. **AI writing assistant** — `cm/ai-*` exchange protocol for Claude Code integration (`C-c a` prefix), shared via `~/.emacs-ai/`, interactive `*ai-suggestions*` review buffer (`C-c a S`)
-16. **Claude Code IDE** — editor-hosted Claude sessions via `claude-code-ide.el` (`C-c c` menu, vterm backend, full Emacs MCP tools + Elisp eval); complements the `cm/ai-*` exchange — see below
 
 ## Naming Conventions
 
@@ -116,30 +115,3 @@ For presenting multiple rewrite options, Claude Code writes `~/.emacs-ai/suggest
   }
 }
 ```
-
-## Claude Code IDE (editor-hosted — `claude-code-ide.el`)
-
-Editor-hosted Claude sessions via [`manzaltu/claude-code-ide.el`](https://github.com/manzaltu/claude-code-ide.el), wired into `init.el` right after the AI-writing-assistant section. `C-c c` opens the transient menu (`claude-code-ide-menu`).
-
-**This is the inverse of the `cm/ai-*` workflow above.** Here Emacs is the *parent*: `M-x claude-code-ide` spawns the `claude` CLI in a vterm buffer and runs a WebSocket MCP "ide" server that Claude dials back into, exposing Emacs to Claude — xref/eglot navigation, `project.el`, tree-sitter, imenu, Flymake diagnostics, `ediff`-based diff review, and Elisp evaluation. The session is tied to that Emacs instance and **cannot attach to a terminal-run Claude** (it always spawns its own); use the menu's resume/continue to reattach to a prior conversation after an ephemeral Emacs restarts. The two systems are complementary — `cm/ai-*` for the long-lived background session, `claude-code-ide` for in-editor IDE-aware sessions.
-
-Configuration (in `init.el`):
-- `claude-code-ide-terminal-backend` = `'vterm` — reuses the already-installed vterm (also the package default).
-- `(claude-code-ide-emacs-tools-setup)` registers the built-in MCP tools **and flips `claude-code-ide-enable-mcp-server` on internally** — calling it is sufficient; there is no separate variable to set.
-- `claude-code-ide-enable-execute-code` stays `t` (default): Claude can evaluate Elisp in the live session.
-- Diagnostics backend is `'auto` → detects Flymake.
-
-### What the embedded session can touch (two MCP surfaces)
-
-The bridge injects **two** MCP servers into the spawned `claude`. Neither appears in `claude mcp list` — they're IDE-injected at connect time (the `~/.claude/ide/*.lock` mechanism), not `claude mcp add`'d — so gate on "am I running inside Emacs?" not on the server list:
-
-- **`ide`** (WebSocket, core bridge) — `mcp__ide__executeCode` evaluates **arbitrary Elisp** in the live Emacs: read/write any buffer, inspect and move point/region, run commands — anything Emacs can do (the handler in `claude-code-ide-mcp-handlers.el` is a bare `(eval (car (read-from-string code)) t)`). Also `mcp__ide__getDiagnostics` (Flymake/Flycheck), plus `openFile`, `openDiff`/`closeAllDiffTabs`, `close_tab`. The tool list is rebuilt on every `tools/list` request, so it reflects live variable values (e.g. `claude-code-ide-enable-execute-code`).
-- **`emacs-tools`** (HTTP, enabled by `claude-code-ide-emacs-tools-setup`) — five read-only navigation helpers: `mcp__emacs-tools__claude-code-ide-mcp-{xref-find-references,xref-find-apropos,project-info,imenu-list-symbols,treesit-info}`.
-
-`executeCode` is the tool that makes the session genuinely useful — without it the embedded Claude is near-blind, since there are **no granular read-buffer / point / region tools**; everything funnels through this one Elisp escape hatch.
-
-### Permissions (`.claude/settings.local.json`, machine-local)
-
-Server *registration* is automatic, but per-tool *permission* still flows through the embedded session's project allow-list. To run the bridge tools prompt-free, the seven names above are listed in this repo's `.claude/settings.local.json` (git-ignored, machine-local — **not committed**), per the "emacs bridge block" in the global `~/.claude/CLAUDE.md` recipe. The Emacs-side `claude-code-ide-mcp-allowed-tools` variable (`'auto` — only pre-approves `mcp__emacs-tools__*` at spawn, never the `ide` tools) is left at its default; the settings-file allow-list supersedes it.
-
-**Safety:** `mcp__ide__executeCode` runs in your *live* Emacs, not a sandbox — Elisp side effects hit the editor directly. Pre-approving it trades the per-call confirmation for trust; keep evals read-only unless a task explicitly calls for buffer/state mutation.

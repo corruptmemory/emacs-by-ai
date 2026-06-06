@@ -96,18 +96,6 @@ Claude Code can also query Emacs state directly via `emacsclient -s <server> -e`
 
 For saved files, Claude Code can edit directly — `global-auto-revert-mode` picks up changes.
 
-## Claude Code IDE (editor-hosted)
-
-[`claude-code-ide.el`](https://github.com/manzaltu/claude-code-ide.el) runs the inverse of the file-exchange flow above: Emacs spawns the `claude` CLI in a vterm buffer and stands up a WebSocket MCP server that Claude connects back into, exposing Emacs to Claude (xref/eglot, `project`, tree-sitter, imenu, Flymake diagnostics, `ediff` diff review, and Elisp evaluation).
-
-| Key | Action |
-|-----|--------|
-| `C-c c` | `claude-code-ide-menu` — start/toggle, send prompt, resume, list sessions |
-
-Backend is `vterm`; `claude-code-ide-emacs-tools-setup` exposes the built-in Emacs tools and Elisp eval stays enabled. Sessions are tied to the Emacs instance (it spawns its own `claude` rather than attaching to a terminal session) — use the menu's resume/continue to reattach after a restart. Complements the file-based `cm/ai-*` flow rather than replacing it.
-
-The session reaches Emacs through two MCP servers it injects into `claude`: the **`ide`** server, whose `executeCode` tool evaluates arbitrary Elisp in the live editor (read/write buffers, point/region, run commands) alongside `getDiagnostics`; and the read-only **`emacs-tools`** server (xref / imenu / tree-sitter / project info). Neither appears in `claude mcp list` — they're injected at connect time. To use them without a confirmation prompt on every call, allow-list the seven `mcp__ide__*` / `mcp__emacs-tools__*` tool names in `.claude/settings.local.json` (machine-local, git-ignored). Note that `executeCode` is unsandboxed — it mutates your live Emacs directly.
-
 ## Additional packages
 
 - **vterm** — full terminal emulator inside Emacs (fish shell, 10k scrollback)

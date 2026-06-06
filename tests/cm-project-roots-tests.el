@@ -73,5 +73,15 @@
       (should (cl-some (lambda (f) (string-suffix-p "alpha.txt" f)) files))
       (should (cl-some (lambda (f) (string-suffix-p "beta.txt" f)) files)))))
 
+(ert-deftest cm/project-refs--fallback-word-bounded-pattern ()
+  (let (captured)
+    (cl-letf (((symbol-function 'eglot-managed-p) (lambda () nil))
+              ((symbol-function 'consult-ripgrep)
+               (lambda (&rest args) (setq captured args)))
+              ((symbol-function 'cm/project-roots) (lambda () '("/r1" "/r2")))
+              ((symbol-function 'cm/project--symbol) (lambda () "foo")))
+      (cm/project-refs-all-roots)
+      (should (equal captured '(("/r1" "/r2") "\\bfoo\\b"))))))
+
 (provide 'cm-project-roots-tests)
 ;;; cm-project-roots-tests.el ends here

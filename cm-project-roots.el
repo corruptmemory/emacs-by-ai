@@ -121,5 +121,26 @@ A prefix argument forces FALLBACK."
     (find-file (consult--read files :prompt "Find file (all roots): "
                               :category 'file :require-match t :sort nil))))
 
+(defun cm/project--symbol ()
+  "Return the active region, the symbol at point, or a prompted string."
+  (or (and (use-region-p)
+           (buffer-substring-no-properties (region-beginning) (region-end)))
+      (thing-at-point 'symbol t)
+      (read-string "Symbol: ")))
+
+(defun cm/project-search-all-roots ()
+  "Grep a pattern across all project roots (one live `consult-ripgrep')."
+  (interactive)
+  (consult-ripgrep (cm/project-roots)))
+
+(defun cm/project-refs-all-roots ()
+  "Find references to the symbol at point across roots; LSP-first."
+  (interactive)
+  (cm/eglot--prefer
+   :referencesProvider
+   (lambda () (call-interactively #'xref-find-references))
+   (lambda () (consult-ripgrep (cm/project-roots)
+                               (concat "\\b" (regexp-quote (cm/project--symbol)) "\\b")))))
+
 (provide 'cm-project-roots)
 ;;; cm-project-roots.el ends here

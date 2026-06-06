@@ -83,5 +83,20 @@
       (cm/project-refs-all-roots)
       (should (equal captured '(("/r1" "/r2") "\\bfoo\\b"))))))
 
+(ert-deftest cm/project-jump-def--fallback-finds-def-in-other-root ()
+  (skip-unless (and (executable-find "rg") (require 'dumb-jump nil t)))
+  (let* ((a (file-name-as-directory (make-temp-file "cmpr-ja" t)))
+         (b (file-name-as-directory (make-temp-file "cmpr-jb" t)))
+         (a-file (expand-file-name "use.el" a)))
+    (with-temp-file a-file (insert "(cm-xroot-demo-fn)\n"))
+    (with-temp-file (expand-file-name "def.el" b)
+      (insert "(defun cm-xroot-demo-fn () 'ok)\n"))
+    (with-current-buffer (find-file-noselect a-file)
+      (emacs-lisp-mode)
+      (let ((results (cm/project-jump-def--fallback-results
+                      (list a b) "cm-xroot-demo-fn")))
+        (should (cl-some (lambda (r) (string-suffix-p "def.el" (plist-get r :path)))
+                         results))))))
+
 (provide 'cm-project-roots-tests)
 ;;; cm-project-roots-tests.el ends here

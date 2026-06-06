@@ -142,5 +142,52 @@ A prefix argument forces FALLBACK."
    (lambda () (consult-ripgrep (cm/project-roots)
                                (concat "\\b" (regexp-quote (cm/project--symbol)) "\\b")))))
 
+(defun cm/project-jump-def--fallback-results (roots &optional symbol)
+  "Merge dumb-jump definition results for SYMBOL across ROOTS.
+Dedupes on (:path . :line).  SYMBOL defaults to the symbol at point."
+  (require 'dumb-jump)
+  (let* ((cur-file (or buffer-file-name (buffer-name)))
+         (lang (dumb-jump-get-language cur-file))
+         (sym (or symbol (thing-at-point 'symbol t)))
+         results)
+    (dolist (root roots)
+      (setq results
+            (append results
+                    (plist-get (dumb-jump-fetch-results cur-file root lang nil sym)
+                               :results))))
+    (cl-delete-duplicates
+     results
+     :test (lambda (x y) (and (equal (plist-get x :path) (plist-get y :path))
+                              (equal (plist-get x :line) (plist-get y :line)))))))
+
+(defun cm/project-jump-def--goto (result)
+  "Jump to dumb-jump RESULT, pushing the xref marker stack first."
+  (xref-push-marker-stack)
+  (find-file (plist-get result :path))
+  (goto-char (point-min))
+  (forward-line (1- (plist-get result :line))))
+
+(defun cm/project-jump-def--present ()
+  "Run the multi-root dumb-jump fallback and jump."
+  (let ((results (cm/project-jump-def--fallback-results (cm/project-roots))))
+    (pcase (length results)
+      (0 (user-error "No definitions found across project roots"))
+      (1 (cm/project-jump-def--goto (car results)))
+      (_ (cm/project-jump-def--goto
+          (let* ((fmt (lambda (r) (format "%s:%d: %s" (plist-get r :path)
+                                          (plist-get r :line)
+                                          (string-trim (or (plist-get r :context) "")))))
+                 (alist (mapcar (lambda (r) (cons (funcall fmt r) r)) results))
+                 (choice (completing-read "Definition: " alist nil t)))
+            (cdr (assoc choice alist))))))))
+
+(defun cm/project-jump-def-all-roots ()
+  "Jump to the definition of the symbol at point across roots; LSP-first."
+  (interactive)
+  (cm/eglot--prefer
+   :definitionProvider
+   (lambda () (call-interactively #'xref-find-definitions))
+   #'cm/project-jump-def--present))
+
 (provide 'cm-project-roots)
 ;;; cm-project-roots.el ends here

@@ -116,6 +116,7 @@ A prefix argument forces FALLBACK."
 (defun cm/project-find-file-all-roots ()
   "Find a file by name across all project roots."
   (interactive)
+  (require 'consult) ; `consult--read' is internal — not autoloaded like `consult-ripgrep'.
   (let ((files (cm/project-find-file--candidates (cm/project-roots))))
     (unless files (user-error "No files found across project roots"))
     (find-file (consult--read files :prompt "Find file (all roots): "

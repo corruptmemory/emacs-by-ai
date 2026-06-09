@@ -1477,11 +1477,29 @@ With prefix argument REFRESH, rebuild completion cache first."
 ;; java-ts-mode is built-in; jdtls is eglot's default.
 ;; Install eclipse.jdt.ls and ensure it is on your PATH.
 
+;;;; Compilation buffers.
+;; Render ANSI SGR color escapes (the cyan/red source snippets the Jai compiler
+;; emits, cargo/rg output, etc.) as faces instead of leaving raw `^[[0;96m'
+;; control codes littering the buffer.  Global: applies to every compilation
+;; buffer.  `ansi-color-compilation-filter' is autoloaded from ansi-color.
+(add-hook 'compilation-filter-hook #'ansi-color-compilation-filter)
+
 ;;;; Jai.
 ;; jai-ts-mode.el: regex font-lock + syntax table.  Tree-sitter is not used —
 ;; Jai's bracketed/unbracketed control forms exceed tree-sitter's 64K state
 ;; limit.  Enable eglot once jails is built (see commented entry above).
 (load (locate-user-emacs-file "jai-ts-mode") t)
+
+;; Teach `compile' to recognize Jai diagnostics so `next-error' can navigate to
+;; them.  Jai writes `file:line,column:' with a COMMA between line and column;
+;; the built-in `gnu' pattern only accepts `:' or `.' there, so without this
+;; entry the error headline is never linkified.  A "Warning"/"Info" keyword sets
+;; the face; anything else (Error, or no keyword) is treated as an error.
+(with-eval-after-load 'compile
+  (add-to-list 'compilation-error-regexp-alist-alist
+               '(jai "^\\([^:\n]+\\.jai\\):\\([0-9]+\\),\\([0-9]+\\): \\(?:\\(Warning\\)\\|\\(Info\\)\\)?"
+                     1 2 3 (4 . 5)))
+  (add-to-list 'compilation-error-regexp-alist 'jai))
 
 ;;;; Scala.
 ;; scala-ts-mode provides tree-sitter font-lock, indentation, and imenu.

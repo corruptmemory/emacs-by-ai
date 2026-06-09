@@ -63,6 +63,10 @@ Chunk-based word motion and deletion (`cm/move-right`, `cm/move-left`, `cm/backw
 | `<f9>` / `<f10>` | Next / previous error |
 | `<f12>` | Organize imports + format buffer (eglot) |
 
+## Compilation
+
+`compilation-mode` renders ANSI color (via `ansi-color-compilation-filter`) instead of leaking raw escape codes, and recognizes Jai's `file:line,column` diagnostic format so `next-error` (`<f9>`/`<f10>`) jumps to Jai compile errors — the stock `gnu` matcher only handles `file:line:column`.
+
 ## SQL tooling
 
 Custom xref-based cross-project reference search for SQL identifiers:

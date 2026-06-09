@@ -37,7 +37,7 @@ The file is organized in this order:
 11. **Git** — Magit, diff-hl (with flydiff for unsaved-change indicators)
 12. **Popup/buffer management** — Popper with project-based grouping, helpful, vterm
 13. **Dev tooling** — treesit-auto, yasnippet, eglot (20+ language hooks, autoreconnect, harper-ls for writing modes), eglot-booster, consult-eglot, eldoc-box, flymake, dape (DAP)
-14. **Language configs** — Go (format-on-save, gotest, dape/Delve wrappers with auto-breakpoint), SQL (xref helpers, completion), docker, pdf-tools, then all other languages
+14. **Language configs** — Go (format-on-save, gotest, dape/Delve wrappers with auto-breakpoint), SQL (xref helpers, completion), docker, pdf-tools, compile-mode tweaks (ANSI color + Jai `line,column` error navigation — see below), then all other languages
 15. **AI writing assistant** — `cm/ai-*` exchange protocol for Claude Code integration (`C-c a` prefix), shared via `~/.emacs-ai/`, interactive `*ai-suggestions*` review buffer (`C-c a S`)
 16. **Multi-root project search** — `cm-project-roots.el` (loaded after the consult-eglot block): opt-in `C-c w` commands spanning dirs listed in a `.project-roots` file; LSP-first jump/refs, rg-based search/find-file; see below
 
@@ -72,6 +72,15 @@ emacs --batch --init-directory=~/projects/emacs-again -l init.el --eval '
 ## Jai and Tree-Sitter
 
 `jai-ts-mode.el` deliberately does **not** use tree-sitter. Jai's bracketed/unbracketed control flow variants (every control form has both `if x { }` and `if x stmt;` styles) cause the LR automaton state count to exceed tree-sitter's hard-coded 64K limit. Multiple serious attempts to build a complete grammar failed for this reason. The best available grammar (`overlord-systems/jai-tree-sitter`) only parses variable declarations and produces ERROR nodes for nearly all real code. Syntax highlighting uses regex font-lock instead.
+
+## Compilation buffers
+
+Two `compile`-mode tweaks live just before the Jai block in `init.el`:
+
+- **Jai error navigation.** Jai writes diagnostics as `file:line,column:` — a **comma** between line and column. Emacs' built-in `gnu` pattern in `compilation-error-regexp-alist` only accepts `:` or `.` there, so without help `next-error` can't see Jai errors at all. A custom `jai` entry is registered (inside `with-eval-after-load 'compile`); a `Warning`/`Info` keyword sets the face, anything else (incl. `Error`) is an error, and the pattern is anchored to `.jai` so it can't misfire on Go/Rust/etc. builds.
+- **ANSI color.** `ansi-color-compilation-filter` is added to `compilation-filter-hook` (not enabled by default in Emacs 30.2) so compile buffers render SGR escapes as faces instead of leaving raw `^[[…m` codes in the buffer.
+
+**Why color appears at all:** Emacs runs `compile` on a PTY (`isatty` is true), and tools like the Jai compiler only colorize when the output terminal supports color — so a raw shell pipe (non-TTY) already suppresses it, but the Emacs buffer does not. For Jai specifically, `-no_color` is implemented by the **Default Metaprogram**, so a project with its own `first.jai` build metaprogram must propagate `use_ansi_color` to its target workspace (`copy_commonly_propagated_fields(get_build_options(), *opts)`) for `-no_color` to reach the real build. The `ansi-color` filter is the belt-and-suspenders that keeps the buffer clean either way.
 
 ## AI Writing Assistant (Claude Code Integration)
 

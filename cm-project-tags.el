@@ -65,5 +65,23 @@ Yields to Eglot (LSP wins) by returning nil in eglot-managed buffers."
        (not (bound-and-true-p eglot--managed-mode))
        'cm/tags-cascade))
 
+;; --- Activation (intended for `find-file-hook') ------------------------------
+
+(defun cm/project-tags-maybe-activate ()
+  "Load a root project TAGS for this code buffer and install the cascade backend.
+No-op unless the buffer derives from `prog-mode' and its project root holds a
+readable TAGS file.  The backend is installed at the highest hook priority so it
+preempts `xref-union' (which would otherwise merge dumb-jump's hits in)."
+  (when (derived-mode-p 'prog-mode)
+    (when-let* ((tags (cm/project-tags-file)))
+      ;; Bind BOTH buffer-locally: tags-table-list alone conflicts with the
+      ;; global tags-file-name a previously-visited project left behind (etags
+      ;; then prompts "Keep current list of tags tables also?" or misses the
+      ;; lookup).  Pinning tags-file-name to the same file keeps them in sync.
+      (setq-local tags-table-list (list tags)
+                  tags-file-name tags)
+      (setq-local cm/project-tags--active t)
+      (add-hook 'xref-backend-functions #'cm/project-tags-xref-backend -100 t))))
+
 (provide 'cm-project-tags)
 ;;; cm-project-tags.el ends here

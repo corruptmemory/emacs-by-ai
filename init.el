@@ -978,6 +978,16 @@ Valid entries must have a regexp string as their car."
 (when (load (locate-user-emacs-file "cm-project-roots") t)
   (global-set-key (kbd "C-c w") cm/project-roots-prefix-map))
 
+;;;; Project TAGS — auto-load a build-generated root TAGS index — see cm-project-tags.el.
+;; If a project root holds a TAGS file (e.g. emitted by a Jai build's metaprogram),
+;; load it buffer-locally for code buffers and prefer it for navigation: LSP wins
+;; where a server manages the buffer, else the precise etags index, else dumb-jump.
+;; `tags-revert-without-query' makes the in-memory table silently re-read after the
+;; build regenerates TAGS — no file-watcher, the next lookup picks up the fresh one.
+(setq tags-revert-without-query t)
+(when (load (locate-user-emacs-file "cm-project-tags") t)
+  (add-hook 'find-file-hook #'cm/project-tags-maybe-activate))
+
 ;;;; eldoc-box — floating documentation at point.
 (use-package eldoc-box
   :after eglot

@@ -94,5 +94,38 @@ Writes `in.el' (in-tags-fn), `only.el' (only-grep-fn), `use.el', and a
       (let ((tbl (xref-backend-identifier-completion-table 'cm/tags-cascade)))
         (should (member "in-tags-fn" (all-completions "in-" tbl)))))))
 
+;; --- activation -------------------------------------------------------------
+
+(ert-deftest cm/project-tags-maybe-activate--installs-cascade ()
+  (skip-unless (executable-find "etags"))
+  (let* ((p (cm/test-tags--project '("src/in.el")))
+         (root (car p)) (tags (cdr p))
+         (src (expand-file-name "src/in.el" root)))
+    (with-current-buffer (find-file-noselect src)
+      (emacs-lisp-mode)
+      (cl-letf (((symbol-function 'project-current) (lambda (&rest _) (list 'fake root)))
+                ((symbol-function 'project-root) (lambda (_) root)))
+        (cm/project-tags-maybe-activate))
+      (should cm/project-tags--active)
+      (should (equal tags-table-list (list tags)))
+      (should (equal tags-file-name tags))
+      (should (memq #'cm/project-tags-xref-backend xref-backend-functions)))))
+
+(ert-deftest cm/project-tags-maybe-activate--noop-without-tags ()
+  (with-temp-buffer
+    (prog-mode)
+    (cl-letf (((symbol-function 'cm/project-tags-file) (lambda (&rest _) nil)))
+      (cm/project-tags-maybe-activate))
+    (should (null cm/project-tags--active))
+    (should-not (memq #'cm/project-tags-xref-backend xref-backend-functions))))
+
+(ert-deftest cm/project-tags-maybe-activate--noop-in-non-prog-buffer ()
+  (with-temp-buffer
+    (fundamental-mode)
+    (cl-letf (((symbol-function 'cm/project-tags-file)
+               (lambda (&rest _) (error "should not be called in non-prog buffer"))))
+      (cm/project-tags-maybe-activate))
+    (should (null cm/project-tags--active))))
+
 (provide 'cm-project-tags-tests)
 ;;; cm-project-tags-tests.el ends here

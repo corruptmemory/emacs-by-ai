@@ -43,15 +43,10 @@ subdirectories, matching build tools that emit a single root-level index."
 (cl-defmethod xref-backend-definitions ((_ (eql cm/tags-cascade)) identifier)
   "Prefer the precise TAGS index; fall back to dumb-jump only on a miss.
 `etags' returns nil (not an error) when a symbol is absent, so the `or'
-short-circuits to a direct jump on a hit and to dumb-jump otherwise.
-Suppress interactive prompts with `inhibit-interaction' to ensure batch
-mode (test suite) doesn't hit stdin EOF."
-  (let ((inhibit-interaction t))
-    (or (condition-case nil
-          (xref-backend-definitions 'etags identifier)
-          (inhibited-interaction nil))
-        (progn (require 'dumb-jump)
-               (xref-backend-definitions 'dumb-jump identifier)))))
+short-circuits to a direct jump on a hit and to dumb-jump otherwise."
+  (or (xref-backend-definitions 'etags identifier)
+      (progn (require 'dumb-jump)
+             (xref-backend-definitions 'dumb-jump identifier))))
 
 (cl-defmethod xref-backend-references ((_ (eql cm/tags-cascade)) identifier)
   "Delegate references to dumb-jump.

@@ -66,7 +66,7 @@ Writes `in.el' (in-tags-fn), `only.el' (only-grep-fn), `use.el', and a
          (root (car p)) (tags (cdr p)))
     (with-current-buffer (find-file-noselect (expand-file-name "src/use.el" root))
       (emacs-lisp-mode)
-      (setq-local tags-table-list (list tags))
+      (setq-local tags-table-list (list tags) tags-file-name tags)
       (let ((defs (xref-backend-definitions 'cm/tags-cascade "in-tags-fn")))
         (should (= 1 (length defs)))))))
 
@@ -80,7 +80,7 @@ Writes `in.el' (in-tags-fn), `only.el' (only-grep-fn), `use.el', and a
          (root (car p)) (tags (cdr p)))
     (with-current-buffer (find-file-noselect (expand-file-name "src/use.el" root))
       (emacs-lisp-mode)
-      (setq-local tags-table-list (list tags))
+      (setq-local tags-table-list (list tags) tags-file-name tags)
       (let ((defs (xref-backend-definitions 'cm/tags-cascade "only-grep-fn")))
         (should (>= (length defs) 1))))))
 
@@ -90,7 +90,7 @@ Writes `in.el' (in-tags-fn), `only.el' (only-grep-fn), `use.el', and a
          (root (car p)) (tags (cdr p)))
     (with-current-buffer (find-file-noselect (expand-file-name "src/use.el" root))
       (emacs-lisp-mode)
-      (setq-local tags-table-list (list tags))
+      (setq-local tags-table-list (list tags) tags-file-name tags)
       (let ((tbl (xref-backend-identifier-completion-table 'cm/tags-cascade)))
         (should (member "in-tags-fn" (all-completions "in-" tbl)))))))
 

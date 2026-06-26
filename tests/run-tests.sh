@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run the cm-project-roots ERT suite in batch.
+# Run every ERT suite under tests/ in batch.
 set -euo pipefail
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 exec emacs -batch -Q \
@@ -10,5 +10,6 @@ exec emacs -batch -Q \
                 (dolist (d (directory-files b t \"^[^.]\"))
                   (when (file-directory-p d) (add-to-list 'load-path d))))))" \
   -l ert \
-  -l "$REPO/tests/cm-project-roots-tests.el" \
+  --eval "(dolist (f (directory-files \"$REPO/tests\" t \"-tests\\\\.el\\\\'\"))
+            (load f nil t))" \
   -f ert-run-tests-batch-and-exit

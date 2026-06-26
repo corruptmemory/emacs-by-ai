@@ -29,8 +29,6 @@ subdirectories, matching build tools that emit a single root-level index."
 ;; LSP is handled elsewhere (eglot's own xref backend); this backend only ever
 ;; claims a buffer when no server manages it (see `cm/project-tags-xref-backend').
 
-(declare-function dumb-jump-xref-activate "dumb-jump")
-
 (defvar-local cm/project-tags--active nil
   "Non-nil when this buffer has a project TAGS loaded and the cascade installed.")
 

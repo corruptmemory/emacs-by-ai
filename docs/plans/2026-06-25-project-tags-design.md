@@ -173,10 +173,14 @@ M-. on `tmp_local`  (a local, not in TAGS)
 - **No project / no root TAGS** → `cm/project-tags-file` returns nil, nothing is
   activated, behavior is identical to today (xref-union/dumb-jump). The feature
   is purely additive.
-- **TAGS deleted or unreadable after activation** → etags' own machinery reports
-  "no tags table" through the normal path; cascade's `or` still falls to
-  dumb-jump for definitions/references. (Activation re-checks readability each
-  `find-file`, so a fresh visit recovers.)
+- **TAGS deleted (not regenerated) after activation** → builds *rewrite* the
+  index (handled silently by `tags-revert-without-query`); but if the file is
+  genuinely removed, the next etags lookup surfaces a *loud* error rather than
+  silently falling through to dumb-jump — the cascade's `or` short-circuits only
+  on a nil result, not on a signal. That is intentional: a vanished index should
+  be visible, not masked (the repo's no-silent-failures standard). A freshly
+  *opened* buffer re-runs activation and simply won't install the cascade when no
+  readable TAGS is found.
 - **eglot attaches after the hook** (e.g. a future jails) → the cascade guard
   checks `eglot--managed-mode` at query time, so LSP transparently wins without
   re-running the hook.

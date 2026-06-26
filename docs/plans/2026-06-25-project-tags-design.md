@@ -87,9 +87,14 @@ only dumb-jump's regex heuristics, ignoring a precise index that already exists.
    the project root via `project-current`; if `TAGS` sits at that root, point
    the buffer's etags table at it **buffer-locally** (so project A's table never
    bleeds into project B), deferring the actual read to first use (no prompt).
-   The exact variable (`tags-table-list` buffer-local vs. `visit-tags-table …
-   LOCAL`) is pinned during implementation by empirical check; the contract is
-   "buffer-local, lazy, prompt-free."
+   Empirically pinned: set **both** `tags-table-list` *and* `tags-file-name`
+   buffer-locally (`setq-local`), never a global `visit-tags-table`. Setting
+   `tags-table-list` alone is insufficient — once a second project's TAGS is
+   visited in the same session, etags finds the buffer-local list conflicting
+   with the global `tags-file-name` left by the first project and either prompts
+   "Keep current list of tags tables also?" or fails to find the definition.
+   Binding `tags-file-name` buffer-locally to the same file makes the buffer's
+   "current table" agree with its list, eliminating both failure modes.
 
 4. **Reload via `tags-revert-without-query t`** — silent re-read on the next
    lookup whenever the file's modtime changed. No file-notify watcher. (A

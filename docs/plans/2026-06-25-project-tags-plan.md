@@ -24,9 +24,13 @@ is `tags-revert-without-query`'s silent modtime re-read — no file-watcher.
 - The xref backend symbol is `cm/tags-cascade` (dispatched as the **unquoted**
   `(eql cm/tags-cascade)` specializer — verified to work in this Emacs; matches
   how `dumb-jump` defines its own backend).
-- Buffer-local table variable is `tags-table-list` (set with `setq-local`) —
-  NOT `tags-file-name`, NOT a global `visit-tags-table` (avoids cross-project
-  pollution and the "Visit tags table?" prompt).
+- Buffer-local table variables: set **both** `tags-table-list` AND
+  `tags-file-name` with `setq-local` (NOT a global `visit-tags-table`). Both are
+  required: `tags-table-list` alone makes etags conflict with the global
+  `tags-file-name` left by a previously-visited project (prompts "Keep current
+  list of tags tables also?" or fails the lookup); binding `tags-file-name`
+  buffer-locally to the same file makes the buffer's current table agree with
+  its list. Verified empirically across two projects in one session.
 - The cascade backend hook is added at depth `-100` (highest priority;
   `xref-union-hook-depth` is `-95`).
 - `etags` `definitions` returns nil on a miss (cascade relies on this); `etags`
@@ -234,7 +238,7 @@ Writes `in.el' (in-tags-fn), `only.el' (only-grep-fn), `use.el', and a
          (root (car p)) (tags (cdr p)))
     (with-current-buffer (find-file-noselect (expand-file-name "src/use.el" root))
       (emacs-lisp-mode)
-      (setq-local tags-table-list (list tags))
+      (setq-local tags-table-list (list tags) tags-file-name tags)
       (let ((defs (xref-backend-definitions 'cm/tags-cascade "in-tags-fn")))
         (should (= 1 (length defs)))))))
 
@@ -248,7 +252,7 @@ Writes `in.el' (in-tags-fn), `only.el' (only-grep-fn), `use.el', and a
          (root (car p)) (tags (cdr p)))
     (with-current-buffer (find-file-noselect (expand-file-name "src/use.el" root))
       (emacs-lisp-mode)
-      (setq-local tags-table-list (list tags))
+      (setq-local tags-table-list (list tags) tags-file-name tags)
       (let ((defs (xref-backend-definitions 'cm/tags-cascade "only-grep-fn")))
         (should (>= (length defs) 1))))))
 
@@ -258,7 +262,7 @@ Writes `in.el' (in-tags-fn), `only.el' (only-grep-fn), `use.el', and a
          (root (car p)) (tags (cdr p)))
     (with-current-buffer (find-file-noselect (expand-file-name "src/use.el" root))
       (emacs-lisp-mode)
-      (setq-local tags-table-list (list tags))
+      (setq-local tags-table-list (list tags) tags-file-name tags)
       (let ((tbl (xref-backend-identifier-completion-table 'cm/tags-cascade)))
         (should (member "in-tags-fn" (all-completions "in-" tbl)))))))
 ```
@@ -377,6 +381,7 @@ Insert into `tests/cm-project-tags-tests.el`, immediately before
         (cm/project-tags-maybe-activate))
       (should cm/project-tags--active)
       (should (equal tags-table-list (list tags)))
+      (should (equal tags-file-name tags))
       (should (memq #'cm/project-tags-xref-backend xref-backend-functions)))))
 
 (ert-deftest cm/project-tags-maybe-activate--noop-without-tags ()
@@ -415,7 +420,12 @@ readable TAGS file.  The backend is installed at the highest hook priority so it
 preempts `xref-union' (which would otherwise merge dumb-jump's hits in)."
   (when (derived-mode-p 'prog-mode)
     (when-let* ((tags (cm/project-tags-file)))
-      (setq-local tags-table-list (list tags))
+      ;; Bind BOTH buffer-locally: tags-table-list alone conflicts with the
+      ;; global tags-file-name a previously-visited project left behind (etags
+      ;; then prompts "Keep current list of tags tables also?" or misses the
+      ;; lookup).  Pinning tags-file-name to the same file keeps them in sync.
+      (setq-local tags-table-list (list tags)
+                  tags-file-name tags)
       (setq-local cm/project-tags--active t)
       (add-hook 'xref-backend-functions #'cm/project-tags-xref-backend -100 t))))
 ```
@@ -504,9 +514,12 @@ In `CLAUDE.md`, immediately before the `## Markdown preview` section, insert:
 `cm-project-roots.el`) auto-loads a build-generated `TAGS` index and wires it
 into navigation. On `find-file`, in any `prog-mode` buffer, `cm/project-tags-file`
 checks the project root (via `project-current`) for a `TAGS`; if present it is
-bound buffer-locally (`setq-local tags-table-list` — never a global
-`visit-tags-table`, so projects don't pollute each other) and a custom xref
-backend is installed.
+bound buffer-locally (`setq-local` of both `tags-table-list` and
+`tags-file-name` — never a global `visit-tags-table`, so projects don't pollute
+each other) and a custom xref backend is installed. Binding both is required:
+with only `tags-table-list`, etags conflicts with the global `tags-file-name` a
+previously-visited project left behind and prompts "Keep current list of tags
+tables also?" (or misses the lookup).
 
 **Navigation priority** (`cm/tags-cascade`, a `cl-defmethod` xref backend):
 
@@ -607,4 +620,5 @@ with expected output.
 and Tasks 2–3 tests (dispatch). `cm/project-tags-file`,
 `cm/project-tags--active`, `cm/project-tags-xref-backend`, and
 `cm/project-tags-maybe-activate` names match across library, init.el wiring, and
-tests. `tags-table-list` (not `tags-file-name`) used consistently.
+tests. Both `tags-table-list` and `tags-file-name` are set buffer-locally
+(activation and the Task 2/3 tests) — consistently paired.

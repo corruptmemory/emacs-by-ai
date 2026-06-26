@@ -25,5 +25,50 @@ subdirectories, matching build tools that emit a single root-level index."
               (tags (expand-file-name "TAGS" root)))
     (and (file-readable-p tags) tags)))
 
+;; --- Cascading xref backend: etags first, dumb-jump fallback -----------------
+;; LSP is handled elsewhere (eglot's own xref backend); this backend only ever
+;; claims a buffer when no server manages it (see `cm/project-tags-xref-backend').
+
+(declare-function dumb-jump-xref-activate "dumb-jump")
+
+(defvar-local cm/project-tags--active nil
+  "Non-nil when this buffer has a project TAGS loaded and the cascade installed.")
+
+(cl-defmethod xref-backend-identifier-at-point ((_ (eql cm/tags-cascade)))
+  (xref-backend-identifier-at-point 'etags))
+
+(cl-defmethod xref-backend-identifier-completion-table ((_ (eql cm/tags-cascade)))
+  (xref-backend-identifier-completion-table 'etags))
+
+(cl-defmethod xref-backend-definitions ((_ (eql cm/tags-cascade)) identifier)
+  "Prefer the precise TAGS index; fall back to dumb-jump only on a miss.
+`etags' returns nil (not an error) when a symbol is absent, so the `or'
+short-circuits to a direct jump on a hit and to dumb-jump otherwise.
+Suppress interactive prompts with `inhibit-interaction' to ensure batch
+mode (test suite) doesn't hit stdin EOF."
+  (let ((inhibit-interaction t))
+    (or (condition-case nil
+          (xref-backend-definitions 'etags identifier)
+          (inhibited-interaction nil))
+        (progn (require 'dumb-jump)
+               (xref-backend-definitions 'dumb-jump identifier)))))
+
+(cl-defmethod xref-backend-references ((_ (eql cm/tags-cascade)) identifier)
+  "Delegate references to dumb-jump.
+etags has no references method of its own, so this preserves the exact behavior
+a non-LSP buffer already has today."
+  (require 'dumb-jump)
+  (xref-backend-references 'dumb-jump identifier))
+
+(cl-defmethod xref-backend-apropos ((_ (eql cm/tags-cascade)) pattern)
+  (xref-backend-apropos 'etags pattern))
+
+(defun cm/project-tags-xref-backend ()
+  "Return the cascade backend when a project TAGS is active and no LSP applies.
+Yields to Eglot (LSP wins) by returning nil in eglot-managed buffers."
+  (and cm/project-tags--active
+       (not (bound-and-true-p eglot--managed-mode))
+       'cm/tags-cascade))
+
 (provide 'cm-project-tags)
 ;;; cm-project-tags.el ends here

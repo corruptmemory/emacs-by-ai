@@ -67,6 +67,18 @@ Chunk-based word motion and deletion (`cm/move-right`, `cm/move-left`, `cm/backw
 
 `compilation-mode` renders ANSI color (via `ansi-color-compilation-filter`) instead of leaking raw escape codes, and recognizes Jai's `file:line,column` diagnostic format so `next-error` (`<f9>`/`<f10>`) jumps to Jai compile errors — the stock `gnu` matcher only handles `file:line:column`.
 
+## Project TAGS
+
+If a project root holds a build-generated `TAGS` index, it is loaded
+automatically (buffer-locally) for code buffers, and navigation prefers it:
+`M-.` uses LSP where a server manages the buffer, otherwise the precise `TAGS`
+index (a direct jump), falling back to dumb-jump only when `TAGS` has no match.
+The table silently reloads after each rebuild (`tags-revert-without-query`), so a
+build that regenerates `TAGS` is picked up on the next lookup. Generic across
+projects; implemented in `cm-project-tags.el` (ERT tests under `tests/`). The
+driving case is Jai, whose build emits a compiler-precise index and which has no
+stable LSP.
+
 ## SQL tooling
 
 Custom xref-based cross-project reference search for SQL identifiers:

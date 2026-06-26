@@ -40,6 +40,7 @@ The file is organized in this order:
 14. **Language configs** — Go (format-on-save, gotest, dape/Delve wrappers with auto-breakpoint), SQL (xref helpers, completion), docker, pdf-tools, compile-mode tweaks (ANSI color + Jai `line,column` error navigation — see below), then all other languages
 15. **AI writing assistant** — `cm/ai-*` exchange protocol for Claude Code integration (`C-c a` prefix), shared via `~/.emacs-ai/`, interactive `*ai-suggestions*` review buffer (`C-c a S`)
 16. **Multi-root project search** — `cm-project-roots.el` (loaded after the consult-eglot block): opt-in `C-c w` commands spanning dirs listed in a `.project-roots` file; LSP-first jump/refs, rg-based search/find-file; see below
+17. **Project TAGS auto-loading** — `cm-project-tags.el` (loaded after the multi-root block): on `find-file`, if the project root holds a `TAGS` file, load it buffer-locally and install the `cm/tags-cascade` xref backend (etags → dumb-jump fallback; yields to Eglot). See below.
 
 ## Naming Conventions
 
@@ -139,6 +140,48 @@ For presenting multiple rewrite options, Claude Code writes `~/.emacs-ai/suggest
 - Existing single-root commands are untouched (the feature is purely additive).
 
 Tests: ERT suite under `tests/`, run with `./tests/run-tests.sh` (integration tests `skip-unless` `rg`/`dumb-jump` are present). Design + plan: `docs/plans/2026-06-06-multi-root-project-design.md` and `…-plan.md`.
+
+## Project TAGS auto-loading
+
+`cm-project-tags.el` (a sibling library loaded from `init.el`, like
+`cm-project-roots.el`) auto-loads a build-generated `TAGS` index and wires it
+into navigation. On `find-file`, in any `prog-mode` buffer, `cm/project-tags-file`
+checks the project root (via `project-current`) for a `TAGS`; if present it is
+bound buffer-locally (`setq-local` of both `tags-table-list` and
+`tags-file-name` — never a global `visit-tags-table`, so projects don't pollute
+each other) and a custom xref backend is installed. Binding both is required:
+with only `tags-table-list`, etags conflicts with the global `tags-file-name` a
+previously-visited project left behind and prompts "Keep current list of tags
+tables also?" (or misses the lookup).
+
+**Navigation priority** (`cm/tags-cascade`, a `cl-defmethod` xref backend):
+
+| In a buffer where… | Backend used |
+|---|---|
+| Eglot manages it | LSP alone (the cascade returns nil) |
+| no LSP, project root has `TAGS` | **etags → dumb-jump fallback** |
+| neither | dumb-jump via `xref-union` (unchanged) |
+
+The cascade is added to `xref-backend-functions` at depth `-100` (above
+`xref-union-hook-depth`'s `-95`), so `run-hook-with-args-until-success` selects
+it first and `xref-union` never absorbs it. `definitions` tries `etags` (which
+returns nil — not an error — on a miss) and only then `dumb-jump`, so a TAGS hit
+is a **direct jump** while misses still fall back. `references` delegates
+straight to `dumb-jump` (etags has no references method), preserving the exact
+non-LSP `M-?` behavior. `identifier-at-point`, completion, and `apropos`
+delegate to `etags`.
+
+**Reload on regenerate:** `tags-revert-without-query` is `t` (set in `init.el`),
+so etags silently re-reads the table whenever its on-disk modtime changes — the
+next `M-.` after a rebuild uses the fresh index. No file-watcher.
+
+**The driving case is Jai** (`~/projects/game-bootstrap`), whose `first.jai`
+emits a compiler-precise ETAGS index every successful build and which has no
+wired LSP — but the feature is generic: a `TAGS` file at a project root is taken
+as the signal that good tooling produced it. Where an LSP exists, the cascade
+yields and LSP wins, so "generic" costs nothing. Tests: ERT suite under `tests/`
+(`./tests/run-tests.sh`). Design + plan:
+`docs/plans/2026-06-25-project-tags-design.md` and `…-plan.md`.
 
 ## Markdown preview
 

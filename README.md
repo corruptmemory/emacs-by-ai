@@ -77,7 +77,9 @@ The table silently reloads after each rebuild (`tags-revert-without-query`), so 
 build that regenerates `TAGS` is picked up on the next lookup. Generic across
 projects; implemented in `cm-project-tags.el` (ERT tests under `tests/`). The
 driving case is Jai, whose build emits a compiler-precise index and which has no
-stable LSP.
+stable LSP. Jump precision depends on the generator writing standard etags
+def-text (the indented line prefix); one that stores only the bare identifier
+relocates top-level symbols but not indented ones — see CLAUDE.md for details.
 
 ## SQL tooling
 

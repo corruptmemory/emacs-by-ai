@@ -175,6 +175,19 @@ delegate to `etags`.
 so etags silently re-reads the table whenever its on-disk modtime changes — the
 next `M-.` after a rebuild uses the fresh index. No file-watcher.
 
+**Index-quality caveat (a property of the generator, not the cascade).** `M-.`
+precision depends on the `TAGS` generator emitting standard etags *def-text* —
+the source line's leading text, **indentation included** — as the relocation
+pattern. etags goes to the recorded line and re-searches for that pattern
+anchored at `^`; a generator that records only the bare identifier (no
+indentation) relocates column-0 symbols (top-level procs/structs/globals) but
+fails on every *indented* symbol (struct fields, nested decls) with `Rerun
+etags: '^NAME' not found`, because `^NAME` can't match `    NAME`. The cascade
+still did its job (it consulted the precise index); the fix belongs in the
+generator. (The byte-offset field is irrelevant once the pattern matches.) This
+bit `game-bootstrap`'s `modules/ctags` until it was taught to emit the indented
+line prefix.
+
 **The driving case is Jai** (`~/projects/game-bootstrap`), whose `first.jai`
 emits a compiler-precise ETAGS index every successful build and which has no
 wired LSP — but the feature is generic: a `TAGS` file at a project root is taken

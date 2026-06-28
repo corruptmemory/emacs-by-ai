@@ -24,6 +24,8 @@ projects
 tramp
 transient/
 custom.el
+sessions/
+project-stash.el
 
 # Misc artifacts
 .PKGINFO

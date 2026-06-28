@@ -183,12 +183,12 @@
   (skip-unless (require 'easysession nil t))
   (let* ((easysession-directory (make-temp-file "cm-sess" t))
          (name "IT"))
-    ;; register our handlers and create a project scratch buffer
-    (easysession-define-handler "cm-project-scratch"
-      #'cm/scratch--load-handler #'cm/scratch--save-handler)
+    ;; register handlers the same way cm/project-sessions-setup does
+    (cm/session--install-handlers)
     (let ((buf (get-buffer-create "*scratch:IT:1*")))
       (with-current-buffer buf (insert "INTEGRATION"))
-      (let ((easysession-switch-to-save-session nil))
+      (let ((easysession-switch-to-save-session nil)
+            (easysession-confirm-new-session nil))
         (easysession-switch-to name))   ; create + set current
       (easysession-save name)
       (kill-buffer buf)

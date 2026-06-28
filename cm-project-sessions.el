@@ -188,6 +188,26 @@ reloaded after, so it survives the kill."
         (message "[cm/session] switched to %s" target)
         (if existing 'restored 'created))))))
 
+;; --- Handler registration --------------------------------------------------
+
+(defun cm/session--install-handlers ()
+  "Register cm-project-scratch save/load handlers with easysession.
+Uses `easysession-define-generic-save-handler' to return the structured
+\(key value remaining-buffers) alist that `easysession-save' expects.
+`easysession-define-save-handler' assumes the user function returns
+\(buffers . DATA), which our standalone serializer does not — this wrapper
+produces the correct format while keeping `cm/scratch--save-handler' testable
+as a pure serialization function."
+  (easysession-define-load-handler "cm-project-scratch"
+    #'cm/scratch--load-handler)
+  (easysession-define-generic-save-handler "cm-project-scratch"
+    (let* ((data (cm/scratch--save-handler buffers))
+           (remaining (seq-remove #'cm/scratch--project-buffer-p buffers)))
+      (when data
+        (list (cons 'key "cm-project-scratch")
+              (cons 'value data)
+              (cons 'remaining-buffers remaining))))))
+
 ;; --- C-x p p advice, startup restore, setup --------------------------------
 
 (defun cm/session--project-switch-advice (_orig &optional dir &rest _)
@@ -220,8 +240,7 @@ leaves Emacs blank (a fresh project is created on the first `C-x p p')."
         (delq 'save-place-find-file-hook easysession-exclude-from-find-file-hook))
   (setq easysession-save-interval cm/session-save-interval)
   (easysession-save-mode 1)
-  (easysession-define-handler "cm-project-scratch"
-    #'cm/scratch--load-handler #'cm/scratch--save-handler)
+  (cm/session--install-handlers)
   (advice-add 'project-switch-project :around #'cm/session--project-switch-advice)
   (add-hook 'emacs-startup-hook #'cm/session-startup)
   (add-hook 'kill-emacs-hook #'cm/stash-save))

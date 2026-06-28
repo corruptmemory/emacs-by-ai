@@ -239,6 +239,10 @@ leaves Emacs blank (a fresh project is created on the first `C-x p p')."
   (setq easysession-exclude-from-find-file-hook
         (delq 'save-place-find-file-hook easysession-exclude-from-find-file-hook))
   (setq easysession-save-interval cm/session-save-interval)
+  ;; Never prompt to confirm creating a project's session on first switch —
+  ;; zero-ceremony flipping is the whole point (C-x p p into a new project
+  ;; should create its session silently).
+  (setq easysession-confirm-new-session nil)
   (easysession-save-mode 1)
   (cm/session--install-handlers)
   (advice-add 'project-switch-project :around #'cm/session--project-switch-advice)

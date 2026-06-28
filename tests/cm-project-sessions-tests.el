@@ -185,18 +185,20 @@
          (name "IT"))
     ;; register handlers the same way cm/project-sessions-setup does
     (cm/session--install-handlers)
-    (let ((buf (get-buffer-create "*scratch:IT:1*")))
-      (with-current-buffer buf (insert "INTEGRATION"))
-      (let ((easysession-switch-to-save-session nil)
-            (easysession-confirm-new-session nil))
-        (easysession-switch-to name))   ; create + set current
-      (easysession-save name)
-      (kill-buffer buf)
-      (should-not (get-buffer "*scratch:IT:1*"))
-      (easysession-load name)
-      (should (equal "INTEGRATION"
-                     (with-current-buffer "*scratch:IT:1*" (buffer-string))))
-      (when (get-buffer "*scratch:IT:1*") (kill-buffer "*scratch:IT:1*")))))
+    (unwind-protect
+        (let ((buf (get-buffer-create "*scratch:IT:1*")))
+          (with-current-buffer buf (insert "INTEGRATION"))
+          (let ((easysession-switch-to-save-session nil)
+                (easysession-confirm-new-session nil))
+            (easysession-switch-to name))   ; create + set current
+          (easysession-save name)
+          (kill-buffer buf)
+          (should-not (get-buffer "*scratch:IT:1*"))
+          (easysession-load name)
+          (should (equal "INTEGRATION"
+                         (with-current-buffer "*scratch:IT:1*" (buffer-string)))))
+      (when (get-buffer "*scratch:IT:1*") (kill-buffer "*scratch:IT:1*"))
+      (delete-directory easysession-directory t))))
 
 (provide 'cm-project-sessions-tests)
 ;;; cm-project-sessions-tests.el ends here

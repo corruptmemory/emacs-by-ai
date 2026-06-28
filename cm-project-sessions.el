@@ -194,19 +194,20 @@ reloaded after, so it survives the kill."
   "Register cm-project-scratch save/load handlers with easysession.
 Uses `easysession-define-generic-save-handler' to return the structured
 \(key value remaining-buffers) alist that `easysession-save' expects.
-`easysession-define-save-handler' assumes the user function returns
-\(buffers . DATA), which our standalone serializer does not — this wrapper
-produces the correct format while keeping `cm/scratch--save-handler' testable
-as a pure serialization function."
+`easysession-define-save-handler' expects the user function to return
+\((buffers . DATA) (remaining-buffers . REST)) — our standalone serializer
+returns a plain data alist, not that structured form — so this wrapper builds
+the full alist directly while keeping `cm/scratch--save-handler' testable as a
+pure serialization function."
   (easysession-define-load-handler "cm-project-scratch"
     #'cm/scratch--load-handler)
   (easysession-define-generic-save-handler "cm-project-scratch"
-    (let* ((data (cm/scratch--save-handler buffers))
-           (remaining (seq-remove #'cm/scratch--project-buffer-p buffers)))
+    (let ((data (cm/scratch--save-handler buffers)))
       (when data
-        (list (cons 'key "cm-project-scratch")
-              (cons 'value data)
-              (cons 'remaining-buffers remaining))))))
+        (let ((remaining (seq-remove #'cm/scratch--project-buffer-p buffers)))
+          (list (cons 'key "cm-project-scratch")
+                (cons 'value data)
+                (cons 'remaining-buffers remaining)))))))
 
 ;; --- C-x p p advice, startup restore, setup --------------------------------
 

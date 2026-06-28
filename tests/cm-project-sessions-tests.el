@@ -105,5 +105,39 @@
         (when (get-buffer n) (kill-buffer n)))
       (when (file-exists-p cm/stash-file) (delete-file cm/stash-file)))))
 
+;; --- the flip --------------------------------------------------------------
+
+(ert-deftest cm/session-switch--not-a-project ()
+  "Returns `not-a-project' and does nothing when DIR is not in a project."
+  (cl-letf (((symbol-function 'cm/session--root-of) (lambda (_) nil))
+            ((symbol-function 'easysession-get-session-name) (lambda () "current")))
+    (should (eq 'not-a-project (cm/session-switch-to-project "/tmp/x")))))
+
+(ert-deftest cm/session-switch--noop-when-same-project ()
+  "Returns `noop' when the target session equals the current one."
+  (cl-letf (((symbol-function 'cm/session--root-of) (lambda (_) "/tmp/p/"))
+            ((symbol-function 'cm/session-name-for-project) (lambda (_) "P"))
+            ((symbol-function 'easysession-get-session-name) (lambda () "P")))
+    (should (eq 'noop (cm/session-switch-to-project "/tmp/p/")))))
+
+(ert-deftest cm/session-switch--full-flow-order ()
+  "Leaving a project: prompt-save, stash-save, session-save, teardown, switch, stash-load."
+  (let ((calls '())
+        (easysession-directory (make-temp-file "cm-sess" t))
+        (easysession-switch-to-save-session t))
+    (cl-letf (((symbol-function 'cm/session--root-of) (lambda (_) "/tmp/b/"))
+              ((symbol-function 'cm/session-name-for-project) (lambda (_) "B"))
+              ((symbol-function 'easysession-get-session-name) (lambda () "A"))
+              ((symbol-function 'save-some-buffers) (lambda (&rest _) (push 'prompt calls)))
+              ((symbol-function 'cm/stash-save) (lambda () (push 'stash-save calls)))
+              ((symbol-function 'easysession-save) (lambda (&rest _) (push 'session-save calls)))
+              ((symbol-function 'easysession-kill-all-buffers) (lambda () (push 'kill calls)))
+              ((symbol-function 'easysession-switch-to) (lambda (n) (push (cons 'switch n) calls)))
+              ((symbol-function 'cm/stash-load) (lambda () (push 'stash-load calls))))
+      ;; target "B" has no session file on disk -> `created'
+      (should (eq 'created (cm/session-switch-to-project "/tmp/b/")))
+      (should (equal (reverse calls)
+                     '(prompt stash-save session-save kill (switch . "B") stash-load))))))
+
 (provide 'cm-project-sessions-tests)
 ;;; cm-project-sessions-tests.el ends here

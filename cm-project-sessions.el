@@ -20,6 +20,10 @@
   :group 'convenience
   :prefix "cm/")
 
+;; Declare special variables from easysession (not defined when easysession is not available)
+(defvar easysession-directory nil)
+(defvar easysession-switch-to-save-session nil)
+
 (defcustom cm/scratch-default-mode 'text-mode
   "Major mode applied to newly created scratch and stash buffers."
   :type 'function)
@@ -149,6 +153,40 @@ Returns an alist ((NAME . ((buffer-string . TEXT))) …)."
               (funcall cm/scratch-default-mode))
             (erase-buffer)
             (when text (insert text))))))))
+
+;; --- The flip (driven by C-x p p via advice in setup) ----------------------
+
+(defun cm/session-switch-to-project (dir)
+  "Save the current project session, tear it down, and switch to the project at DIR.
+Returns `not-a-project', `noop', `restored', or `created'.
+The current session is saved only when one is loaded (`easysession-save' errors
+otherwise).  Project-scratch buffers are killed explicitly because
+`easysession-kill-all-buffers' spares special buffers; they are restored from
+the target session's blob.  The global stash is saved before teardown and
+reloaded after, so it survives the kill."
+  (let* ((root (cm/session--root-of dir))
+         (target (and root (cm/session-name-for-project root)))
+         (current (easysession-get-session-name)))
+    (cond
+     ((null target)
+      (message "[cm/session] %s is not a project" dir)
+      'not-a-project)
+     ((equal target current)
+      (message "[cm/session] already in %s" target)
+      'noop)
+     (t
+      (let ((existing (file-exists-p (expand-file-name target easysession-directory))))
+        (save-some-buffers nil (lambda () (and buffer-file-name (buffer-modified-p))))
+        (cm/stash-save)
+        (when current (easysession-save))
+        (dolist (buf (seq-filter #'cm/scratch--project-buffer-p (buffer-list)))
+          (kill-buffer buf))
+        (easysession-kill-all-buffers)
+        (let ((easysession-switch-to-save-session nil))
+          (easysession-switch-to target))
+        (cm/stash-load)
+        (message "[cm/session] switched to %s" target)
+        (if existing 'restored 'created))))))
 
 (provide 'cm-project-sessions)
 ;;; cm-project-sessions.el ends here

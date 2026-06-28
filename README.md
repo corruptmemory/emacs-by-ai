@@ -81,6 +81,25 @@ stable LSP. Jump precision depends on the generator writing standard etags
 def-text (the indented line prefix); one that stores only the bare identifier
 relocates top-level symbols but not indented ones — see CLAUDE.md for details.
 
+## Project sessions
+
+Per-project workspace persistence layered over [`easysession`](https://github.com/jamescherti/easysession.el):
+`C-x p p` saves the current project's session, tears the workspace down, and
+restores (or creates) the target project's — open files, window/split layout,
+per-file cursor position, and unsaved scratch buffers — without starting a second
+Emacs. Launching Emacs inside a project restores that project's session
+automatically.
+
+Scratch buffers come in two tiers:
+
+| Key | Action |
+|-----|--------|
+| `C-c n` | New per-project scratch buffer (`*scratch:<proj>:N*`), instant |
+| `C-u C-c n` | New/visit a global stash buffer (`*stash:<name>*`), always present |
+
+Implemented in `cm-project-sessions.el`; ERT tests under `tests/`. Design + plan
+in `docs/plans/2026-06-28-project-sessions-{design,plan}.md`.
+
 ## SQL tooling
 
 Custom xref-based cross-project reference search for SQL identifiers:

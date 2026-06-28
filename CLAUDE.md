@@ -41,6 +41,11 @@ The file is organized in this order:
 15. **AI writing assistant** — `cm/ai-*` exchange protocol for Claude Code integration (`C-c a` prefix), shared via `~/.emacs-ai/`, interactive `*ai-suggestions*` review buffer (`C-c a S`)
 16. **Multi-root project search** — `cm-project-roots.el` (loaded after the consult-eglot block): opt-in `C-c w` commands spanning dirs listed in a `.project-roots` file; LSP-first jump/refs, rg-based search/find-file; see below
 17. **Project TAGS auto-loading** — `cm-project-tags.el` (loaded after the multi-root block): on `find-file`, if the project root holds a `TAGS` file, load it buffer-locally and install the `cm/tags-cascade` xref backend (etags → dumb-jump fallback; yields to Eglot). See below.
+18. **Per-project session persistence** — `cm-project-sessions.el` (loaded after
+    the project-TAGS block): `C-x p p` saves the current project's easysession
+    session, tears the workspace down, and restores (or creates) the target's —
+    files, window/split layout, per-file point (via `saveplace`), and unsaved
+    scratch buffers. Two scratch tiers (per-project + global stash). See below.
 
 ## Naming Conventions
 
@@ -195,6 +200,45 @@ as the signal that good tooling produced it. Where an LSP exists, the cascade
 yields and LSP wins, so "generic" costs nothing. Tests: ERT suite under `tests/`
 (`./tests/run-tests.sh`). Design + plan:
 `docs/plans/2026-06-25-project-tags-design.md` and `…-plan.md`.
+
+## Per-project session persistence
+
+`cm-project-sessions.el` (a sibling library, like `cm-project-tags.el`) layers
+over the `easysession` package to give an ephemeral Emacs Sublime-style project
+workspaces. Model: **sessions-as-projects** — one easysession session per project,
+keyed by project root.
+
+- **`C-x p p`** is advised (`:around`) to *flip*: prompt-save modified files →
+  save the global stash → `easysession-save` the current project → kill the
+  current project's scratch buffers and `easysession-kill-all-buffers` (teardown)
+  → `easysession-switch-to` the target (load existing, or create blank) → reload
+  the stash. A brand-new project lands blank and opens `project-find-file`.
+- **Two scratch tiers.** `C-c n` instantly makes a per-project scratch buffer
+  `*scratch:<proj>:N*` (rides that project's session). `C-u C-c n` prompts for a
+  name and makes a global stash buffer `*stash:<name>*` (always present, persisted
+  in `cm/stash-file`, independent of any session). The lone `*scratch*` is part of
+  the global tier. Default major mode: `cm/scratch-default-mode` (`text-mode`).
+- **Startup = restore-by-launch-directory.** If the launch dir is a known project
+  with a saved session, it is restored; otherwise Emacs stays blank until `C-x p p`.
+  This makes the multi-instance habit (one project per Emacs) restore correctly.
+- **Auto-save** (`easysession-save-mode`): on flip, on exit, and every
+  `cm/session-save-interval` seconds (default 60).
+- **Point restoration** relies on `saveplace`; the setup removes
+  `save-place-find-file-hook` from `easysession-exclude-from-find-file-hook`
+  (easysession suppresses it by default).
+- **Not restored by design:** process-backed buffers (REPLs, terminals, LSP) —
+  they re-spawn on demand.
+- **Caveat:** two concurrent instances on the *same* project share one session
+  name; periodic auto-save is last-writer-wins. The expected usage is one instance
+  per project, so this is documented rather than guarded.
+
+Design + plan: `docs/plans/2026-06-28-project-sessions-{design,plan}.md`. ERT
+suite under `tests/`.
+
+**Implementation gotchas (easysession integration):**
+
+- The per-project scratch handler is registered with **`easysession-define-generic-save-handler`**, not `easysession-define-save-handler`. The latter expects the user save function to return `((buffers . DATA) (remaining-buffers . REST))`; our `cm/scratch--save-handler` is a *pure* serializer returning a plain `((NAME . ((buffer-string . TEXT))) …)` alist (so it stays unit-testable without easysession). `cm/session--install-handlers` bridges the two — it builds the structured `(key value remaining-buffers)` result and lets the built-in file/dired handlers consume the `remaining-buffers`. Registering the plain serializer directly via `easysession-define-save-handler` silently stores `nil` (the scratch buffers vanish).
+- `cm/project-sessions-setup` sets **`easysession-confirm-new-session` to nil** so the first `C-x p p` into a project creates its session silently — easysession otherwise prompts "create new session?", which would defeat the zero-ceremony flip.
 
 ## Markdown preview
 

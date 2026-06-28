@@ -1,7 +1,7 @@
 # Per-project session persistence (`cm-project-sessions.el`) — Design
 
 **Date:** 2026-06-28
-**Status:** Approved (brainstorming complete) — proceeding to implementation plan.
+**Status:** Implemented and shipped to `master` 2026-06-28 (user-confirmed on a live frame). See "Implementation notes (as shipped)" at the end for the three points where the build diverged from this design.
 
 ## Goal
 
@@ -225,8 +225,40 @@ ERT suite `tests/cm-project-sessions-tests.el` (repo convention; run via
 ## Affected files
 
 - **New:** `cm-project-sessions.el`, `tests/cm-project-sessions-tests.el`.
-- **Edit:** `init.el` — `use-package easysession` (+ `easysession-scratch`); load the
-  sibling; bind `C-c n`; apply the configuration above. `.gitignore` — the sessions
-  directory + stash file.
+- **Edit:** `init.el` — `use-package easysession`; load the sibling; bind `C-c n`;
+  apply the configuration above. `.gitignore` — the sessions directory + stash file.
 - **Docs:** `CLAUDE.md` (architecture-list item + a section), `README.md` (a
   "Project sessions" section).
+
+## Implementation notes (as shipped)
+
+Built via the superpowers pipeline (brainstorm → plan → subagent-driven
+development) across 8 TDD tasks; 39 ERT tests; user-confirmed on a live frame
+2026-06-28. Three points diverged from the design above and are worth recording:
+
+1. **Scratch handler registration.** The plan registered the per-project scratch
+   handler with `easysession-define-handler`. Real easysession's
+   `define-save-handler` expects the user function to return
+   `((buffers . DATA) (remaining-buffers . REST))`, which the pure serializer
+   `cm/scratch--save-handler` does not — registering it directly silently stores
+   `nil` (scratch vanishes). `cm/session--install-handlers` instead registers the
+   load side via `easysession-define-load-handler` and the save side via
+   `easysession-define-generic-save-handler`, building the structured result while
+   keeping `cm/scratch--save-handler` a pure, unit-tested serializer. Verified:
+   with no project-scratch buffers, file buffers still save (the generic handler
+   returning nil does not starve easysession's built-in file/dired handlers).
+
+2. **No new-session prompt; no `easysession-scratch-mode`.** `cm/project-sessions-setup`
+   sets `easysession-confirm-new-session` to nil — otherwise the first `C-x p p`
+   into a project prompts "create new session?", defeating the zero-ceremony flip.
+   The bundled `easysession-scratch-mode` is deliberately **not** used: it persists
+   only the lone `*scratch*`, and per-session; here the global stash tier owns
+   `*scratch*` instead.
+
+3. **Stash hardening (from the final review).** The global stash, originally saved
+   only on the flip + `kill-emacs-hook`, is also hooked to
+   `easysession-before-save-hook` so it rides the periodic save cadence (a crash
+   otherwise lost stash edits back to the last flip). `cm/stash-save` writes
+   atomically (temp + rename); `cm/stash-load` backs a corrupt stash file up to
+   `FILE.bak` and warns, rather than silently discarding then clobbering it (the
+   repo's no-silent-failures standard).

@@ -45,5 +45,50 @@
   (when-let* ((proj (project-current nil dir)))
     (project-root proj)))
 
+;; --- Scratch tiers ---------------------------------------------------------
+
+(defun cm/scratch--project-buffer-p (buf)
+  "Non-nil when BUF is a per-project scratch buffer (*scratch:PROJ:N*)."
+  (string-prefix-p "*scratch:" (buffer-name buf)))
+
+(defun cm/scratch--stash-buffer-p (buf)
+  "Non-nil when BUF is a global stash buffer (*stash:NAME* or the lone *scratch*)."
+  (let ((name (buffer-name buf)))
+    (or (string-prefix-p "*stash:" name)
+        (string= name "*scratch*"))))
+
+(defun cm/scratch--project-tag ()
+  "Short tag for the current project (its directory basename), or \"none\"."
+  (let ((root (cm/session--root-of default-directory)))
+    (if root
+        (file-name-nondirectory (directory-file-name root))
+      "none")))
+
+(defun cm/scratch--next-project-index (tag)
+  "Return the smallest N >= 1 for which *scratch:TAG:N* is not a live buffer."
+  (let ((n 1))
+    (while (get-buffer (format "*scratch:%s:%d*" tag n))
+      (setq n (1+ n)))
+    n))
+
+(defun cm/scratch-new (&optional global)
+  "Create a fresh scratch buffer, switch to it, and return it.
+Without a prefix: an instant project-tier buffer *scratch:PROJECT:N* (no prompt).
+With prefix GLOBAL (\\[universal-argument]): prompt for NAME and create or visit
+the global stash buffer *stash:NAME*."
+  (interactive "P")
+  (let ((buf (if global
+                 (get-buffer-create
+                  (format "*stash:%s*" (read-string "Stash name: ")))
+               (let ((tag (cm/scratch--project-tag)))
+                 (get-buffer-create
+                  (format "*scratch:%s:%d*" tag
+                          (cm/scratch--next-project-index tag)))))))
+    (with-current-buffer buf
+      (unless (eq major-mode cm/scratch-default-mode)
+        (funcall cm/scratch-default-mode)))
+    (switch-to-buffer buf)
+    buf))
+
 (provide 'cm-project-sessions)
 ;;; cm-project-sessions.el ends here

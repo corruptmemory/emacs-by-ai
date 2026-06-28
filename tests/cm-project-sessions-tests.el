@@ -58,5 +58,28 @@
           (should (equal (buffer-name buf) "*stash:snippets*"))
         (kill-buffer buf)))))
 
+;; --- per-project scratch handler -------------------------------------------
+
+(ert-deftest cm/scratch-handler--round-trip ()
+  "Save handler serializes project scratch buffers; load handler restores them."
+  (let ((a (get-buffer-create "*scratch:proj:1*"))
+        (b (get-buffer-create "*scratch:proj:2*"))
+        (file (get-buffer-create "real.el")))   ; must be ignored
+    (unwind-protect
+        (progn
+          (with-current-buffer a (insert "ALPHA"))
+          (with-current-buffer b (insert "BETA"))
+          (let ((data (cm/scratch--save-handler (list a b file))))
+            (should (= 2 (length data)))
+            (should (equal "ALPHA" (alist-get 'buffer-string (cdr (assoc "*scratch:proj:1*" data)))))
+            ;; now kill and restore from the serialized data
+            (kill-buffer a) (kill-buffer b)
+            (should-not (get-buffer "*scratch:proj:1*"))
+            (cm/scratch--load-handler data)
+            (should (equal "ALPHA" (with-current-buffer "*scratch:proj:1*" (buffer-string))))
+            (should (equal "BETA"  (with-current-buffer "*scratch:proj:2*" (buffer-string))))))
+      (dolist (n '("*scratch:proj:1*" "*scratch:proj:2*" "real.el"))
+        (when (get-buffer n) (kill-buffer n))))))
+
 (provide 'cm-project-sessions-tests)
 ;;; cm-project-sessions-tests.el ends here

@@ -90,5 +90,32 @@ the global stash buffer *stash:NAME*."
     (switch-to-buffer buf)
     buf))
 
+;; --- Per-project scratch handler (registered with easysession in setup) -----
+;; Plain functions (no easysession macros) so they round-trip independently.
+
+(defun cm/scratch--save-handler (buffers)
+  "easysession SAVE handler: serialize the project scratch buffers in BUFFERS.
+Returns an alist ((NAME . ((buffer-string . TEXT))) …)."
+  (delq nil
+        (mapcar
+         (lambda (buf)
+           (when (and (buffer-live-p buf) (cm/scratch--project-buffer-p buf))
+             (with-current-buffer buf
+               (cons (buffer-name buf)
+                     (list (cons 'buffer-string
+                                 (buffer-substring-no-properties
+                                  (point-min) (point-max))))))))
+         buffers)))
+
+(defun cm/scratch--load-handler (session-data)
+  "easysession LOAD handler: recreate project scratch buffers from SESSION-DATA."
+  (dolist (item session-data)
+    (let* ((name (car item))
+           (text (alist-get 'buffer-string (cdr item))))
+      (with-current-buffer (get-buffer-create name)
+        (funcall cm/scratch-default-mode)
+        (erase-buffer)
+        (when text (insert text))))))
+
 (provide 'cm-project-sessions)
 ;;; cm-project-sessions.el ends here

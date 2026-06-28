@@ -148,8 +148,10 @@ C-x p p → (advice) → cm/session-switch-to-project(dir)
 ```
 
 The save-stash-before / reload-stash-after-teardown bracket means the stash
-round-trips through its file on every flip, so teardown cannot lose stash content
-even though `easysession-kill-all-buffers` kills the live stash buffers.
+round-trips through its file on every flip. In practice `easysession-kill-all-buffers`
+spares asterisk-named special buffers, so the live stash buffers survive the kill;
+the explicit `cm/stash-load` after teardown is belt-and-suspenders that restores
+them from `cm/stash-file` regardless.
 
 ## The two scratch tiers
 

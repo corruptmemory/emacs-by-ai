@@ -213,6 +213,9 @@ keyed by project root.
   current project's scratch buffers and `easysession-kill-all-buffers` (teardown)
   → `easysession-switch-to` the target (load existing, or create blank) → reload
   the stash. A brand-new project lands blank and opens `project-find-file`.
+  Note: the advice replaces the default `project-switch-project` dispatch menu
+  entirely — `C-x p p` does the session flip directly; the individual
+  `project-*` commands (e.g. `project-find-file`) are untouched.
 - **Two scratch tiers.** `C-c n` instantly makes a per-project scratch buffer
   `*scratch:<proj>:N*` (rides that project's session). `C-u C-c n` prompts for a
   name and makes a global stash buffer `*stash:<name>*` (always present, persisted

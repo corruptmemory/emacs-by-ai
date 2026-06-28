@@ -200,5 +200,17 @@
       (when (get-buffer "*scratch:IT:1*") (kill-buffer "*scratch:IT:1*"))
       (delete-directory easysession-directory t))))
 
+(ert-deftest cm/stash-load--corrupt-file-backed-up-not-clobbered ()
+  "A corrupt stash file is backed up (not silently discarded) and load no-ops."
+  (let* ((cm/stash-file (make-temp-file "cm-stash" nil ".el"))
+         (bak (concat cm/stash-file ".bak")))
+    (unwind-protect
+        (progn
+          (with-temp-file cm/stash-file (insert "(this is ( not valid"))
+          (cm/stash-load)                       ; must not error
+          (should (file-exists-p bak)))         ; bad data preserved, not lost
+      (when (file-exists-p cm/stash-file) (delete-file cm/stash-file))
+      (when (file-exists-p bak) (delete-file bak)))))
+
 (provide 'cm-project-sessions-tests)
 ;;; cm-project-sessions-tests.el ends here

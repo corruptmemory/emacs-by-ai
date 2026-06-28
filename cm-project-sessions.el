@@ -128,24 +128,36 @@ Returns an alist ((NAME . ((buffer-string . TEXT))) …)."
   (seq-filter #'cm/scratch--stash-buffer-p (buffer-list)))
 
 (defun cm/stash-save ()
-  "Write the global stash buffers to `cm/stash-file'."
-  (let ((data (mapcar (lambda (buf)
-                        (with-current-buffer buf
-                          (list (buffer-name)
-                                (buffer-substring-no-properties
-                                 (point-min) (point-max)))))
-                      (cm/stash--buffers))))
-    (with-temp-file cm/stash-file
+  "Write the global stash buffers to `cm/stash-file' atomically."
+  (let* ((data (mapcar (lambda (buf)
+                         (with-current-buffer buf
+                           (list (buffer-name)
+                                 (buffer-substring-no-properties (point-min) (point-max)))))
+                       (cm/stash--buffers)))
+         (dir (or (file-name-directory cm/stash-file) default-directory))
+         (tmp (make-temp-file (expand-file-name "cm-stash-" dir))))
+    (with-temp-file tmp
       (let ((print-length nil) (print-level nil))
-        (prin1 data (current-buffer))))))
+        (prin1 data (current-buffer))))
+    (rename-file tmp cm/stash-file t)))
 
 (defun cm/stash-load ()
-  "Recreate the global stash buffers from `cm/stash-file'."
+  "Recreate the global stash buffers from `cm/stash-file'.
+On a corrupt file, back it up to FILE.bak and warn instead of silently
+discarding it — the next save then can't clobber the only copy."
   (when (file-readable-p cm/stash-file)
-    (let ((data (with-temp-buffer
-                  (insert-file-contents cm/stash-file)
-                  (goto-char (point-min))
-                  (ignore-errors (read (current-buffer))))))
+    (let ((data (condition-case err
+                    (with-temp-buffer
+                      (insert-file-contents cm/stash-file)
+                      (goto-char (point-min))
+                      (read (current-buffer)))
+                  (error
+                   (let ((bak (concat cm/stash-file ".bak")))
+                     (ignore-errors (copy-file cm/stash-file bak t))
+                     (lwarn 'cm/project-sessions :error
+                            "Corrupt stash file %s (%S); backed up to %s, starting with an empty stash"
+                            cm/stash-file err bak))
+                   nil))))
       (dolist (item data)
         (let ((name (car item)) (text (cadr item)))
           (with-current-buffer (get-buffer-create name)
@@ -248,7 +260,10 @@ leaves Emacs blank (a fresh project is created on the first `C-x p p')."
   (cm/session--install-handlers)
   (advice-add 'project-switch-project :around #'cm/session--project-switch-advice)
   (add-hook 'emacs-startup-hook #'cm/session-startup)
-  (add-hook 'kill-emacs-hook #'cm/stash-save))
+  (add-hook 'kill-emacs-hook #'cm/stash-save)
+  ;; Ride easysession's save cadence (periodic + flip + exit) so the stash has
+  ;; the same ~cm/session-save-interval crash bound as the session blob.
+  (add-hook 'easysession-before-save-hook #'cm/stash-save))
 
 (provide 'cm-project-sessions)
 ;;; cm-project-sessions.el ends here

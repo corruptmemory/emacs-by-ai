@@ -88,7 +88,9 @@ Per-project workspace persistence layered over [`easysession`](https://github.co
 restores (or creates) the target project's — open files, window/split layout,
 per-file cursor position, and unsaved scratch buffers — without starting a second
 Emacs. Launching Emacs inside a project restores that project's session
-automatically.
+automatically. Note: `C-x p p` replaces the stock `project-switch-project`
+dispatch menu (the advice never calls the original); individual `project-*`
+commands are untouched.
 
 Scratch buffers come in two tiers:
 

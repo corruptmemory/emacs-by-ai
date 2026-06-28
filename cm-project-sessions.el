@@ -188,5 +188,43 @@ reloaded after, so it survives the kill."
         (message "[cm/session] switched to %s" target)
         (if existing 'restored 'created))))))
 
+;; --- C-x p p advice, startup restore, setup --------------------------------
+
+(defun cm/session--project-switch-advice (_orig &optional dir &rest _)
+  "Route `project-switch-project' through the session flip.
+DIR is the chosen project directory (read interactively when nil).  A brand-new
+project (no saved session) lands blank, so kick off `project-find-file' to help
+the user start; an existing project is fully restored and needs nothing more."
+  (let ((dir (or dir (project-prompt-project-dir))))
+    (when (eq 'created (cm/session-switch-to-project dir))
+      (let ((default-directory dir))
+        (project-find-file)))))
+
+(defun cm/session-startup ()
+  "Load the global stash, then restore the launch directory's project session.
+Restores only when a saved session exists for the launch project; otherwise
+leaves Emacs blank (a fresh project is created on the first `C-x p p')."
+  (cm/stash-load)
+  (when-let* ((root (cm/session--root-of default-directory))
+              (name (cm/session-name-for-project root)))
+    (when (file-exists-p (expand-file-name name easysession-directory))
+      (let ((easysession-switch-to-save-session nil))
+        (easysession-switch-to name)))))
+
+(defun cm/project-sessions-setup ()
+  "Enable per-project session persistence.  Call after `easysession' is loaded."
+  (require 'easysession)
+  ;; Let saveplace restore point during session restore (easysession suppresses
+  ;; it by default to own point via window-state, which is unreliable headless).
+  (setq easysession-exclude-from-find-file-hook
+        (delq 'save-place-find-file-hook easysession-exclude-from-find-file-hook))
+  (setq easysession-save-interval cm/session-save-interval)
+  (easysession-save-mode 1)
+  (easysession-define-handler "cm-project-scratch"
+    #'cm/scratch--load-handler #'cm/scratch--save-handler)
+  (advice-add 'project-switch-project :around #'cm/session--project-switch-advice)
+  (add-hook 'emacs-startup-hook #'cm/session-startup)
+  (add-hook 'kill-emacs-hook #'cm/stash-save))
+
 (provide 'cm-project-sessions)
 ;;; cm-project-sessions.el ends here

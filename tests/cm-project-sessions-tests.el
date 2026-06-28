@@ -139,5 +139,64 @@
       (should (equal (reverse calls)
                      '(prompt stash-save session-save kill (switch . "B") stash-load))))))
 
+;; --- advice / startup ------------------------------------------------------
+
+(ert-deftest cm/session-advice--routes-to-flip ()
+  "The advice calls the flip with the chosen dir; a `created' result opens a file."
+  (let ((switched nil) (found nil))
+    (cl-letf (((symbol-function 'cm/session-switch-to-project)
+               (lambda (dir) (setq switched dir) 'created))
+              ((symbol-function 'project-find-file) (lambda (&rest _) (setq found t))))
+      (cm/session--project-switch-advice #'ignore "/tmp/new/")
+      (should (equal switched "/tmp/new/"))
+      (should found))))   ; 'created path kicks off project-find-file
+
+(ert-deftest cm/session-startup--restores-existing-launch-project ()
+  "Startup loads the stash, then restores the launch dir's session when it exists."
+  (let ((loaded nil) (stash nil)
+        (easysession-directory (make-temp-file "cm-sess" t)))
+    ;; pretend the launch dir is project P and its session file exists
+    (with-temp-file (expand-file-name "P" easysession-directory) (insert ""))
+    (cl-letf (((symbol-function 'cm/stash-load) (lambda () (setq stash t)))
+              ((symbol-function 'cm/session--root-of) (lambda (_) "/tmp/p/"))
+              ((symbol-function 'cm/session-name-for-project) (lambda (_) "P"))
+              ((symbol-function 'easysession-switch-to) (lambda (n) (setq loaded n))))
+      (cm/session-startup)
+      (should stash)
+      (should (equal loaded "P")))))
+
+(ert-deftest cm/session-startup--blank-when-no-saved-session ()
+  "Startup does not switch when the launch project has no saved session yet."
+  (let ((loaded nil)
+        (easysession-directory (make-temp-file "cm-sess" t)))
+    (cl-letf (((symbol-function 'cm/stash-load) #'ignore)
+              ((symbol-function 'cm/session--root-of) (lambda (_) "/tmp/p/"))
+              ((symbol-function 'cm/session-name-for-project) (lambda (_) "P"))
+              ((symbol-function 'easysession-switch-to) (lambda (n) (setq loaded n))))
+      (cm/session-startup)
+      (should (null loaded)))))
+
+;; --- integration: real easysession round-trip (skipped if not installed) ---
+
+(ert-deftest cm/session-integration--scratch-handler-round-trip ()
+  "With easysession present, a registered handler round-trips project scratch."
+  (skip-unless (require 'easysession nil t))
+  (let* ((easysession-directory (make-temp-file "cm-sess" t))
+         (name "IT"))
+    ;; register our handlers and create a project scratch buffer
+    (easysession-define-handler "cm-project-scratch"
+      #'cm/scratch--load-handler #'cm/scratch--save-handler)
+    (let ((buf (get-buffer-create "*scratch:IT:1*")))
+      (with-current-buffer buf (insert "INTEGRATION"))
+      (let ((easysession-switch-to-save-session nil))
+        (easysession-switch-to name))   ; create + set current
+      (easysession-save name)
+      (kill-buffer buf)
+      (should-not (get-buffer "*scratch:IT:1*"))
+      (easysession-load name)
+      (should (equal "INTEGRATION"
+                     (with-current-buffer "*scratch:IT:1*" (buffer-string))))
+      (when (get-buffer "*scratch:IT:1*") (kill-buffer "*scratch:IT:1*")))))
+
 (provide 'cm-project-sessions-tests)
 ;;; cm-project-sessions-tests.el ends here

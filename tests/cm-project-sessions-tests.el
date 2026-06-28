@@ -81,5 +81,27 @@
       (dolist (n '("*scratch:proj:1*" "*scratch:proj:2*" "real.el"))
         (when (get-buffer n) (kill-buffer n))))))
 
+;; --- global stash ----------------------------------------------------------
+
+(ert-deftest cm/stash--round-trip ()
+  "Stash save writes live stash buffers; load recreates them from the file."
+  (let* ((cm/stash-file (make-temp-file "cm-stash" nil ".el"))
+         (s (get-buffer-create "*stash:snippets*"))
+         (sc (get-buffer-create "*scratch*"))
+         (proj (get-buffer-create "*scratch:proj:1*")))  ; must NOT be in the stash
+    (unwind-protect
+        (progn
+          (with-current-buffer s (insert "REUSABLE"))
+          (with-current-buffer sc (erase-buffer) (insert "LONE"))
+          (cm/stash-save)
+          (kill-buffer s) (kill-buffer sc)
+          (should-not (get-buffer "*stash:snippets*"))
+          (cm/stash-load)
+          (should (equal "REUSABLE" (with-current-buffer "*stash:snippets*" (buffer-string))))
+          (should (equal "LONE" (with-current-buffer "*scratch*" (buffer-string)))))
+      (dolist (n '("*stash:snippets*" "*scratch:proj:1*"))
+        (when (get-buffer n) (kill-buffer n)))
+      (when (file-exists-p cm/stash-file) (delete-file cm/stash-file)))))
+
 (provide 'cm-project-sessions-tests)
 ;;; cm-project-sessions-tests.el ends here

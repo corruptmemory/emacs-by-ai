@@ -117,5 +117,38 @@ Returns an alist ((NAME . ((buffer-string . TEXT))) …)."
         (erase-buffer)
         (when text (insert text))))))
 
+;; --- Global stash (always-present; persisted outside any session blob) ------
+
+(defun cm/stash--buffers ()
+  "Return the live global stash buffers (and the lone *scratch*)."
+  (seq-filter #'cm/scratch--stash-buffer-p (buffer-list)))
+
+(defun cm/stash-save ()
+  "Write the global stash buffers to `cm/stash-file'."
+  (let ((data (mapcar (lambda (buf)
+                        (with-current-buffer buf
+                          (list (buffer-name)
+                                (buffer-substring-no-properties
+                                 (point-min) (point-max)))))
+                      (cm/stash--buffers))))
+    (with-temp-file cm/stash-file
+      (let ((print-length nil) (print-level nil))
+        (prin1 data (current-buffer))))))
+
+(defun cm/stash-load ()
+  "Recreate the global stash buffers from `cm/stash-file'."
+  (when (file-readable-p cm/stash-file)
+    (let ((data (with-temp-buffer
+                  (insert-file-contents cm/stash-file)
+                  (goto-char (point-min))
+                  (ignore-errors (read (current-buffer))))))
+      (dolist (item data)
+        (let ((name (car item)) (text (cadr item)))
+          (with-current-buffer (get-buffer-create name)
+            (unless (string= name "*scratch*")
+              (funcall cm/scratch-default-mode))
+            (erase-buffer)
+            (when text (insert text))))))))
+
 (provide 'cm-project-sessions)
 ;;; cm-project-sessions.el ends here

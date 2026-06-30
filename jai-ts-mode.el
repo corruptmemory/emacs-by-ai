@@ -153,23 +153,87 @@ eglot and the jails language server."
   (setq-local imenu-generic-expression jai-ts-mode--imenu-generic-expression
               imenu-case-fold-search    nil))
 
+(defun jai-ts-mode--postfix-cast-syntax (limit)
+  "Font-lock matcher for Jai postfix cast `foo.(Type)'.  Adapted from jai-mode.
+Sets match groups 1 = `.(', 2 = `)', 3 = the type name (last word inside)."
+  (let ((found nil))
+    (while (and (not found) (re-search-forward "\\.(" limit t))
+      (let ((open-paren-pos (1- (point)))
+            (cast-start (match-beginning 0)))
+        (save-excursion
+          (goto-char open-paren-pos)
+          (condition-case nil
+              (progn
+                (forward-sexp 1)
+                (let ((close-paren-pos (point))
+                      (inner-start (1+ open-paren-pos))
+                      (inner-end (1- (point)))
+                      (type-start nil)
+                      (type-end nil))
+                  (goto-char inner-start)
+                  (while (re-search-forward "\\([[:word:]]+\\)" inner-end t)
+                    (setq type-start (match-beginning 1))
+                    (setq type-end (match-end 1)))
+                  (set-match-data (list cast-start close-paren-pos
+                                        cast-start (+ cast-start 2)
+                                        (1- close-paren-pos) close-paren-pos
+                                        type-start type-end))
+                  (setq found t)))
+            (error nil)))))
+    found))
+
 (defvar jai-ts-mode--font-lock-keywords
-  (let ((keywords  '("if" "else" "while" "for" "return" "break" "continue"
-                     "case" "defer" "inline" "no_inline" "push_context"
-                     "using" "cast" "xx" "struct" "enum" "union"
-                     "null" "true" "false" "it" "it_index"))
-        (types     '("int" "float" "float32" "float64" "bool" "string" "void"
-                     "s8" "s16" "s32" "s64" "u8" "u16" "u32" "u64"
-                     "Any" "Type" "Code")))
-    `(;; Compiler directives: #import, #run, #load, #if, #through, etc.
+  (let ((keywords '("if" "ifx" "else" "then" "while" "for" "switch" "case"
+                    "struct" "enum" "union" "enum_flags" "interface"
+                    "return" "remove" "continue" "break" "defer" "inline"
+                    "no_inline" "using" "code_of" "initializer_of" "size_of"
+                    "type_of" "type_info" "cast" "xx" "context" "operator"
+                    "push_context" "is_constant" "null" "true" "false"))
+        (builtins '("it" "it_index"))
+        (types    '("int" "float" "float32" "float64" "bool" "string" "void"
+                    "s8" "s16" "s32" "s64" "u8" "u16" "u32" "u64"
+                    "Any" "Type" "Code")))
+    `(;; Postfix cast `foo.(Type)' — first, so it wins priority.
+      (jai-ts-mode--postfix-cast-syntax
+       (1 font-lock-keyword-face)
+       (2 font-lock-keyword-face)
+       (3 font-lock-type-face))
+      ;; Compiler directives: #import #run #load #if #through …
       (,(rx "#" (+ (any alpha "_"))) . font-lock-preprocessor-face)
-      ;; Procedure/constant declarations:  name :: () { ... }  /  name :: value
-      (,(rx (group (+ (any alnum "_"))) (+ space) "::") 1 font-lock-function-name-face)
-      ;; Keywords.
+      ;; Notes: @note
+      (,(rx "@" (+ word)) . font-lock-preprocessor-face)
+      ;; Procedure declarations:  name :: (…)  /  name :: inline (…) / #type (…)
+      ("\\([[:word:]]+\\)[[:space:]]*:[[:space:]]*:?[[:space:]]*\\(inline\\|#type\\)?[[:space:]]*("
+       1 font-lock-function-name-face)
+      ;; Type declarations:  name :: struct|enum|union|#type,
+      ("\\([[:word:]]+\\)[[:space:]]*:[[:space:]]*:[[:space:]]*\\(struct\\|enum\\|union\\|#type,\\)"
+       1 font-lock-type-face)
+      ;; Literal-type names:  Foo.{…}  bar.[…]
+      ("\\([[:word:]]+\\)\\.\\({\\|\\[\\)" 1 font-lock-type-face)
+      ;; Keywords / builtins / named types.
       (,(regexp-opt keywords 'words) . font-lock-keyword-face)
-      ;; Types.
+      (,(regexp-opt builtins 'words) . font-lock-variable-name-face)
       (,(regexp-opt types 'words) . font-lock-type-face)
-      ;; Note-style comments: // NOTE: ...
+      ;; Polymorph type names:  $T  $$
+      (,(rx (group "$" (or (1+ word) (opt "$")))) 1 font-lock-type-face)
+      ;; Character literals:  'a'
+      ("\\('[[:word:]]\\)\\>" 1 font-lock-constant-face)
+      ;; Numeric literals.
+      (,(rx symbol-start
+            (or (and (+ digit) (opt (and (any "eE") (opt (any "-+")) (+ digit))))
+                (and "0" (any "xX") (+ hex-digit)))
+            (opt (and (any "_" "A-Z" "a-z") (* (any "_" "A-Z" "a-z" "0-9"))))
+            symbol-end)
+       . font-lock-constant-face)
+      ;; Uninitialized value:  ---
+      ("---" . font-lock-constant-face)
+      ;; General variable type annotation:  name : Type
+      ;; CAVEAT: false-positives on `for it_index, it: foo' (foo read as a type).
+      ;; Emacs regex has no negative lookahead, so this is accepted (documented),
+      ;; not fixed — mirrors the imenu Constants caveat in this file.
+      ("[[:word:]]+[[:space:]]*:[[:space:]]*\\**\\(\\[[[:word:]]*\\]\\|\\[\\.\\.\\]\\)?*[[:space:]]*\\**[[:space:]]*\\([[:word:]]+\\)"
+       2 font-lock-type-face)
+      ;; Note-style comments: // NOTE: …  (kept from the original mode).
       (,(rx "//" (* space) (group (or "NOTE" "TODO" "FIXME" "HACK" "XXX") ":"))
        1 font-lock-warning-face t)))
   "Font-lock keywords for `jai-ts-mode'.")

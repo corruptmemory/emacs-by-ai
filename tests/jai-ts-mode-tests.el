@@ -60,5 +60,31 @@
     (beginning-of-line)
     (should (= 0 (car (syntax-ppss))))))  ; heredoc brace ignored → depth 0
 
+(defun jai-ts-mode-tests--face-at (code needle)
+  "Fontify CODE in `jai-ts-mode'; return the face at the start of NEEDLE."
+  (with-temp-buffer
+    (jai-ts-mode)
+    (insert code)
+    (font-lock-ensure)
+    (goto-char (point-min))
+    (search-forward needle)
+    (let ((f (get-text-property (match-beginning 0) 'face)))
+      (if (and f (listp f)) (car f) f))))
+
+(ert-deftest jai-ts-mode-test-font-lock-number ()
+  "Numeric literals get constant face."
+  (should (eq 'font-lock-constant-face
+              (jai-ts-mode-tests--face-at "x := 42;\n" "42"))))
+
+(ert-deftest jai-ts-mode-test-font-lock-note ()
+  "@notes get preprocessor face."
+  (should (eq 'font-lock-preprocessor-face
+              (jai-ts-mode-tests--face-at "foo :: () {} @MyNote\n" "@MyNote"))))
+
+(ert-deftest jai-ts-mode-test-font-lock-keyword ()
+  "Keywords get keyword face."
+  (should (eq 'font-lock-keyword-face
+              (jai-ts-mode-tests--face-at "f :: () { defer x(); }\n" "defer"))))
+
 (provide 'jai-ts-mode-tests)
 ;;; jai-ts-mode-tests.el ends here

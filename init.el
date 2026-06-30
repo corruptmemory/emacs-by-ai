@@ -277,6 +277,12 @@
   :config
   (add-to-list 'mixed-pitch-fixed-pitch-faces 'org-table))
 
+;; Auto-wrap prose: `text-mode' is built-in (no use-package block) so hook
+;; here.  markdown-mode/gfm-mode and org-mode get visual-line-mode via their
+;; own :hook lists; centralizing text-mode keeps it discoverable next to
+;; the other prose wiring.
+(add-hook 'text-mode-hook #'visual-line-mode)
+
 ;;;; Smooth scrolling (built-in pixel precision + horizontal wheel support).
 (defun cm/apply-scrolling-profile ()
   "Apply scrolling settings from `cm/mouse-profile'."
@@ -1496,7 +1502,9 @@ With prefix argument REFRESH, rebuild completion cache first."
 (use-package markdown-mode
   :mode ("\\.md\\'" . gfm-mode)
   :hook ((markdown-mode . cm/markdown-apply-heading-scale)
-         (gfm-mode      . cm/markdown-apply-heading-scale))
+         (gfm-mode      . cm/markdown-apply-heading-scale)
+         (markdown-mode . visual-line-mode)
+         (gfm-mode      . visual-line-mode))
   :custom
   (markdown-fontify-code-blocks-natively t)
   (markdown-command "cmark-gfm -e table -e strikethrough -e autolink -e tasklist")

@@ -93,5 +93,17 @@
   (should (eq 'font-lock-constant-face
               (jai-ts-mode-tests--face-at "x := foo.(); y := 42;\n" "42"))))
 
+(ert-deftest jai-ts-mode-test-beginning-of-defun ()
+  "From inside a proc, beginning-of-defun lands on its declaration line."
+  (with-temp-buffer
+    (jai-ts-mode)
+    (insert "foo :: () {\n    bar();\n    baz();\n}\n")
+    (goto-char (point-min))
+    (search-forward "baz")
+    (jai-ts-mode--beginning-of-defun)
+    (should (equal (buffer-substring-no-properties
+                    (line-beginning-position) (line-end-position))
+                   "foo :: () {"))))
+
 (provide 'jai-ts-mode-tests)
 ;;; jai-ts-mode-tests.el ends here

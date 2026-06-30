@@ -121,6 +121,45 @@ cannot corrupt indentation."
             (let ((end (match-end 1)))
               (put-text-property (1- end) end 'syntax-table (string-to-syntax "|")))))))))
 
+(defconst jai-ts-mode--defun-rx "(.*).*{"
+  "Heuristic: a procedure-opening line has parens then an opening brace.")
+
+(defun jai-ts-mode--line-is-defun ()
+  "Return non-nil if the current line begins a procedure.  Adapted from jai-mode."
+  (save-excursion
+    (beginning-of-line)
+    (let (found)
+      (while (and (not (eolp)) (not found))
+        (if (looking-at jai-ts-mode--defun-rx)
+            (setq found t)
+          (forward-char 1)))
+      found)))
+
+(defun jai-ts-mode--beginning-of-defun (&optional _arg)
+  "Move to the line on which the current procedure starts.  Adapted from jai-mode."
+  (let ((orig-level (car (syntax-ppss))))
+    (while (and (not (jai-ts-mode--line-is-defun))
+                (not (bobp))
+                (> orig-level 0))
+      (setq orig-level (car (syntax-ppss)))
+      (while (>= (car (syntax-ppss)) orig-level)
+        (skip-chars-backward "^{")
+        (backward-char))))
+  (when (jai-ts-mode--line-is-defun)
+    (beginning-of-line)))
+
+(defun jai-ts-mode--end-of-defun ()
+  "Move to the line on which the current procedure ends.  Adapted from jai-mode."
+  (let ((orig-level (car (syntax-ppss))))
+    (when (> orig-level 0)
+      (jai-ts-mode--beginning-of-defun)
+      (end-of-line)
+      (setq orig-level (car (syntax-ppss)))
+      (skip-chars-forward "^}")
+      (while (>= (car (syntax-ppss)) orig-level)
+        (skip-chars-forward "^}")
+        (forward-char)))))
+
 ;;;###autoload
 (define-derived-mode jai-ts-mode prog-mode "Jai"
   "Major mode for editing Jai source.
@@ -143,6 +182,8 @@ eglot and the jails language server."
               parse-sexp-ignore-comments t
               js-jsx-syntax              nil)
   (setq-local syntax-propertize-function #'jai-ts-mode--syntax-propertize-function)
+  (setq-local beginning-of-defun-function #'jai-ts-mode--beginning-of-defun
+              end-of-defun-function       #'jai-ts-mode--end-of-defun)
   ;; Basic regex font-lock — good enough given tree-sitter can't help here.
   (setq-local font-lock-defaults
               '((jai-ts-mode--font-lock-keywords) nil nil nil nil))

@@ -275,7 +275,12 @@
          (help-mode     . mixed-pitch-mode)
          (eww-mode      . mixed-pitch-mode))
   :config
-  (add-to-list 'mixed-pitch-fixed-pitch-faces 'org-table))
+  ;; Neither `org-table' nor `markdown-table-face' inherits from `fixed-pitch'
+  ;; by default — under bare mixed-pitch their cell content (and the spaces
+  ;; that pad each column to width) would render proportionally and the
+  ;; columns would visibly mis-align.  Both need explicit add-to-list.
+  (add-to-list 'mixed-pitch-fixed-pitch-faces 'org-table)
+  (add-to-list 'mixed-pitch-fixed-pitch-faces 'markdown-table-face))
 
 ;; Auto-wrap prose: `text-mode' is built-in (no use-package block) so hook
 ;; here.  markdown-mode/gfm-mode and org-mode get visual-line-mode via their

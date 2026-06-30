@@ -200,7 +200,7 @@ Managed via [`fontaine`](https://github.com/protesilaos/fontaine) — named pres
 - **Variable-pitch:** Inter
 - **Emoji:** JoyPixels
 
-Prose modes (markdown, gfm, org, text, Info, help/helpful, eww) get [`mixed-pitch-mode`](https://gitlab.com/jabranham/mixed-pitch) automatically — it remaps the buffer's default to the variable-pitch face while leaving anything that inherits from `fixed-pitch` alone. Result: prose flows in Inter; inline code, fenced blocks, and tables stay in TX-02. Org tables are remapped explicitly (`org-table` doesn't inherit `fixed-pitch` by default). Per-buffer toggle: `C-c T p`.
+Prose modes (markdown, gfm, org, text, Info, help/helpful, eww) get [`mixed-pitch-mode`](https://gitlab.com/jabranham/mixed-pitch) automatically — it remaps the buffer's default to the variable-pitch face while leaving faces on `mixed-pitch-fixed-pitch-faces` alone. Result: prose flows in Inter; inline code and fenced blocks stay in TX-02. Both `org-table` and `markdown-table-face` are remapped explicitly so tables keep character-grid alignment (neither face inherits `fixed-pitch` upstream). Per-buffer toggle: `C-c T p`.
 
 Heading sizes in markdown and org are scaled by `cm/heading-scale-factor` (1.2× by default) from the theme baseline; theme changes re-capture the baseline so scaling never compounds.
 

@@ -57,9 +57,16 @@ All themes in `themes/` follow the standard Emacs pattern: `deftheme` → color 
 
 ## Fonts
 
-Two-layer setup. **`fontaine`** owns the global font triplet (`default` / `fixed-pitch` / `variable-pitch`) via named presets — switch at runtime with `M-x fontaine-set-preset` (currently `regular` (TX-02 14pt) and `large` (17pt)). **`mixed-pitch-mode`** runs on a hook list (`markdown-mode`, `gfm-mode`, `org-mode`, `text-mode`, `Info-mode`, `helpful-mode`, `help-mode`, `eww-mode`) and buffer-locally remaps the `default` face to `variable-pitch`. Faces inheriting from `fixed-pitch` (markdown code/tables/fences, org code/verbatim, org-meta-line) stay monospaced automatically — that's the whole reason this works. The pitch toggle is `C-c T p`.
+Two-layer setup. **`fontaine`** owns the global font triplet (`default` / `fixed-pitch` / `variable-pitch`) via named presets — switch at runtime with `M-x fontaine-set-preset` (currently `regular` (TX-02 14pt) and `large` (17pt)). **`mixed-pitch-mode`** runs on a hook list (`markdown-mode`, `gfm-mode`, `org-mode`, `text-mode`, `Info-mode`, `helpful-mode`, `help-mode`, `eww-mode`) and buffer-locally remaps the `default` face to `variable-pitch`. Faces in `mixed-pitch-fixed-pitch-faces` (an explicit override list) stay monospaced; for inline `code`, fenced blocks, and org `~verb~`/`=verbatim=`/`#+meta-lines`, the relevant `markdown-*-face` / `org-*` symbols are already on that list upstream, so they render in TX-02 automatically. The pitch toggle is `C-c T p`.
 
-**The `org-table` exception:** unlike `markdown-table-face`, `org-table` does NOT inherit `fixed-pitch` by default — under bare `mixed-pitch-mode` it would render proportionally and re-recompute column widths on every keystroke, mangling alignment. The fix is one `(add-to-list 'mixed-pitch-fixed-pitch-faces 'org-table)` in the `mixed-pitch` `:config` block — that adds `org-table` to the "keep these fixed" override list, no per-cell hooks needed.
+**The table exceptions — BOTH `org-table` and `markdown-table-face`:** neither inherits from `fixed-pitch`, and neither is on mixed-pitch's upstream whitelist. Under bare `mixed-pitch-mode` both render proportionally — org-table will recompute column widths on every keystroke and mangle alignment; markdown-table-face produces visually ragged "table chrome" because the column-padding spaces between cell content and the trailing `|` are proportional. The fix is two `add-to-list` calls in the `mixed-pitch` `:config` block:
+
+```elisp
+(add-to-list 'mixed-pitch-fixed-pitch-faces 'org-table)
+(add-to-list 'mixed-pitch-fixed-pitch-faces 'markdown-table-face)
+```
+
+Confirm with `M-: (memq 'markdown-table-face mixed-pitch-fixed-pitch-faces)`. If a new prose/table face surfaces in another mode, expect to repeat this pattern — the rule of thumb: anything where character-grid alignment matters needs to be on the whitelist explicitly, because `:inherit fixed-pitch` is not common upstream practice for table faces.
 
 **Inter on Arch:** the system ships only the modern variable font `Inter[opsz,wght].ttf` — there is no separate `Inter Display` family. The opsz axis handles optical-size adaptation internally when the font engine asks for a large size. Don't request `"Inter Display"` as a family name; fontaine would silently fall back.
 

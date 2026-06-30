@@ -118,7 +118,13 @@ effectively GPLv3 if the repo is ever published).
   documented false-positive caveat (it mis-highlights `for it_index, it: foo` —
   Emacs regex has no negative lookahead).
 - **Navigation:** `beginning/end-of-defun` (`C-M-a`/`C-M-e`/`narrow-to-defun`),
-  with BOB/EOB guards so they never signal on malformed/mid-edit buffers.
+  robust against malformed/mid-edit buffers (BOB-guarded backward scan;
+  `forward-sexp` wrapped in `ignore-errors`). Note the `end-of-defun-function`
+  contract: the `end-of-defun` command pre-positions point at the defun's
+  *beginning* (depth 0) and only then calls the function, so `--end-of-defun`
+  walks from the opening line via `forward-sexp` — it does **not** assume point
+  is inside the body (the bug that made `C-M-e` jump backward; commit `c35221f`).
+  Test the editor *commands*, not the hook functions, on nested-`.{}` procs.
 - **Not changed:** the detailed imenu generic expression, the `jai-ts-mode` name,
   and the deliberate no-`jails`/no-tree-sitter stance.
 

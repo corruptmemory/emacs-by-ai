@@ -585,29 +585,34 @@ Expected: FAIL with `void-function jai-ts-mode--beginning-of-defun`.
       found)))
 
 (defun jai-ts-mode--beginning-of-defun (&optional _arg)
-  "Move to the line on which the current procedure starts.  Adapted from jai-mode."
+  "Move to the line on which the current procedure starts.  Adapted from jai-mode.
+The inner loop is BOB-guarded (amended post-review, commit 1401129): without it,
+invoking this inside an unclosed non-brace delimiter with no `{' above signals
+`beginning-of-buffer'."
   (let ((orig-level (car (syntax-ppss))))
     (while (and (not (jai-ts-mode--line-is-defun))
                 (not (bobp))
                 (> orig-level 0))
       (setq orig-level (car (syntax-ppss)))
-      (while (>= (car (syntax-ppss)) orig-level)
+      (while (and (>= (car (syntax-ppss)) orig-level) (not (bobp)))
         (skip-chars-backward "^{")
-        (backward-char))))
+        (unless (bobp) (backward-char)))))
   (when (jai-ts-mode--line-is-defun)
     (beginning-of-line)))
 
 (defun jai-ts-mode--end-of-defun ()
-  "Move to the line on which the current procedure ends.  Adapted from jai-mode."
+  "Move to the line on which the current procedure ends.  Adapted from jai-mode.
+The inner loop is EOB-guarded (amended post-review, commit 1401129) — symmetric
+to `jai-ts-mode--beginning-of-defun'."
   (let ((orig-level (car (syntax-ppss))))
     (when (> orig-level 0)
       (jai-ts-mode--beginning-of-defun)
       (end-of-line)
       (setq orig-level (car (syntax-ppss)))
       (skip-chars-forward "^}")
-      (while (>= (car (syntax-ppss)) orig-level)
+      (while (and (>= (car (syntax-ppss)) orig-level) (not (eobp)))
         (skip-chars-forward "^}")
-        (forward-char)))))
+        (unless (eobp) (forward-char))))))
 ```
 
 - [ ] **Step 3b: Wire the mode body.** In the `define-derived-mode jai-ts-mode` body, after the `syntax-propertize-function` `setq-local` form added in Task 3, add:

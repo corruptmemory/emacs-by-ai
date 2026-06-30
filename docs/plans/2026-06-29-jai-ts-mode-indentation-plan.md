@@ -600,20 +600,32 @@ invoking this inside an unclosed non-brace delimiter with no `{' above signals
   (when (jai-ts-mode--line-is-defun)
     (beginning-of-line)))
 
+;; REWRITTEN post-ship (commit c35221f): the upstream-derived body below
+;; assumed point was INSIDE the defun (depth > 0), but the `end-of-defun'
+;; command pre-positions point at the defun's BEGINNING (depth 0) before calling
+;; `end-of-defun-function' — so `(when (> orig-level 0) …)' no-op'd and C-M-e
+;; went backward to the declaration line.  The shipped version walks from the
+;; opening line via `forward-sexp':
 (defun jai-ts-mode--end-of-defun ()
-  "Move to the line on which the current procedure ends.  Adapted from jai-mode.
-The inner loop is EOB-guarded (amended post-review, commit 1401129) — symmetric
-to `jai-ts-mode--beginning-of-defun'."
-  (let ((orig-level (car (syntax-ppss))))
-    (when (> orig-level 0)
-      (jai-ts-mode--beginning-of-defun)
-      (end-of-line)
-      (setq orig-level (car (syntax-ppss)))
-      (skip-chars-forward "^}")
-      (while (and (>= (car (syntax-ppss)) orig-level) (not (eobp)))
-        (skip-chars-forward "^}")
-        (unless (eobp) (forward-char))))))
+  "Move point just past the closing brace of the current procedure.
+`end-of-defun' calls this with point at the defun's opening line (depth 0); jump
+over the body's balanced braces with `forward-sexp'.  Body brace = last `{' on
+that line not inside a string/comment."
+  (end-of-line)
+  (let (brace)
+    (while (and (not brace) (search-backward "{" (line-beginning-position) t))
+      (unless (nth 8 (syntax-ppss))
+        (setq brace t)))
+    (when brace
+      (ignore-errors (forward-sexp 1)))))
 ```
+
+> **Post-ship note.** The Task-5 tests originally called the `*-function`
+> internals directly (the wrong contract — the `end-of-defun` *command*
+> pre-positions point at the defun start), and on a flat depth-1 proc, so they
+> passed while C-M-e was broken on real nested-`.{}` procs. The shipped tests
+> drive the actual `end-of-defun` / `beginning-of-defun` *commands* on a
+> nested proc. Lesson: test editor *commands*, not just the hook functions.
 
 - [ ] **Step 3b: Wire the mode body.** In the `define-derived-mode jai-ts-mode` body, after the `syntax-propertize-function` `setq-local` form added in Task 3, add:
 

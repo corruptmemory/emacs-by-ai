@@ -1,5 +1,11 @@
 ;;; jai-ts-mode.el --- Major mode for Jai  -*- lexical-binding: t; -*-
 
+;; Indentation (`js-indent-line'), here-string syntax-propertization, defun
+;; navigation, and several font-lock matchers are adapted from jai-mode
+;; <https://github.com/valignatev/jai-mode> (© Kristoffer Grönlund and Valentin
+;; Ignatev), distributed under the GNU GPL v3 or later.  Those portions inherit
+;; that license.
+
 ;; Jai's syntax (bracketed/unbracketed variants of every control form) causes
 ;; tree-sitter's LR state count to exceed the hard-coded 64K limit.  Multiple
 ;; serious attempts to build a complete grammar failed for this reason.  The
@@ -10,6 +16,15 @@
 ;; This mode therefore does NOT activate tree-sitter.  It is a clean
 ;; prog-mode derivative with a proper syntax table and comment variables.
 ;; The real IDE value comes from eglot + jails LSP.
+
+(require 'js)   ; js-indent-line / js-indent-level drive indentation (see below)
+
+;; `js--proper-indentation' references `cpp-font-lock-keywords-source-directives',
+;; which is defined nowhere in Emacs 30.2 — indenting a `#'-led line would
+;; otherwise signal `void-variable'.  This bare `defvar' declares the symbol
+;; special WITHOUT a value, so it clobbers no global value yet lets the dynamic
+;; `let' in `jai-ts-mode--indent-line' bind it.
+(defvar cpp-font-lock-keywords-source-directives)
 
 (defvar jai-ts-mode-syntax-table
   (let ((table (make-syntax-table)))
@@ -47,6 +62,31 @@ lookahead, and excluding it via the RHS would also drop legitimate
 lowercase-RHS constants such as `COLOR_SCHEMES :: float.[...]'.  Idiomatic
 Jai uses Title_Case type names, so this does not trigger in practice.")
 
+(defgroup jai-ts-mode nil
+  "Major mode for editing Jai source."
+  :group 'languages)
+
+(defcustom jai-ts-mode-indent-offset 4
+  "Number of spaces per nesting level in `jai-ts-mode'."
+  :type 'natnum
+  :safe #'natnump
+  :group 'jai-ts-mode)
+
+;; `js-indent-line' provides Jai's C-style indentation (upstream jai-mode's
+;; approach).  js-mode's internals treat `#'-led lines as C preprocessor macros
+;; — wrong for Jai's `#import'/`#run'/`#if'.  Three js variables drive that
+;; path; binding each to an impossible regex (`\\_<\\_>' — a word-start
+;; immediately followed by a word-end, which never matches) makes the cpp/macro
+;; branches inert.  We bind them DYNAMICALLY and locally, not with global
+;; `defconst's like upstream, so js-mode buffers elsewhere are unaffected.
+(defun jai-ts-mode--indent-line ()
+  "Indent the current line via `js-indent-line', with js-mode's C-preprocessor
+handling neutralised so Jai `#'-directives neither crash nor mis-indent."
+  (let ((js--opt-cpp-start "\\_<\\_>")
+        (js--macro-decl-re "\\_<\\_>")
+        (cpp-font-lock-keywords-source-directives "\\_<\\_>"))
+    (js-indent-line)))
+
 ;;;###autoload
 (define-derived-mode jai-ts-mode prog-mode "Jai"
   "Major mode for editing Jai source.
@@ -61,6 +101,13 @@ eglot and the jails language server."
               comment-end         ""
               comment-start-skip  "//+\\s-*"
               indent-tabs-mode    nil)
+  ;; Indentation is js-indent-line (see `jai-ts-mode--indent-line'); the public
+  ;; offset knob feeds js-indent-level.  `parse-sexp-ignore-comments' makes sexp
+  ;; motion skip comments; js-jsx-syntax nil keeps js's JSX path from engaging.
+  (setq-local indent-line-function       #'jai-ts-mode--indent-line
+              js-indent-level            jai-ts-mode-indent-offset
+              parse-sexp-ignore-comments t
+              js-jsx-syntax              nil)
   ;; Basic regex font-lock — good enough given tree-sitter can't help here.
   (setq-local font-lock-defaults
               '((jai-ts-mode--font-lock-keywords) nil nil nil nil))

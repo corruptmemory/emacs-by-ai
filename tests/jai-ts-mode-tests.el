@@ -105,5 +105,15 @@
                     (line-beginning-position) (line-end-position))
                    "foo :: () {"))))
 
+(ert-deftest jai-ts-mode-test-beginning-of-defun-no-signal-malformed ()
+  "beginning-of-defun must not signal on a buffer with no brace above point."
+  (with-temp-buffer
+    (jai-ts-mode)
+    (insert "arr := foo(\n  bar,\n  baz")   ; unclosed paren, no { in buffer
+    (goto-char (point-max))
+    ;; With the unguarded inner loop this signals `beginning-of-buffer';
+    ;; the guarded version returns normally.
+    (should (progn (jai-ts-mode--beginning-of-defun) t))))
+
 (provide 'jai-ts-mode-tests)
 ;;; jai-ts-mode-tests.el ends here

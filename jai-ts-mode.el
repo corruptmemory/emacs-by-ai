@@ -142,9 +142,9 @@ cannot corrupt indentation."
                 (not (bobp))
                 (> orig-level 0))
       (setq orig-level (car (syntax-ppss)))
-      (while (>= (car (syntax-ppss)) orig-level)
+      (while (and (>= (car (syntax-ppss)) orig-level) (not (bobp)))
         (skip-chars-backward "^{")
-        (backward-char))))
+        (unless (bobp) (backward-char)))))
   (when (jai-ts-mode--line-is-defun)
     (beginning-of-line)))
 
@@ -156,9 +156,9 @@ cannot corrupt indentation."
       (end-of-line)
       (setq orig-level (car (syntax-ppss)))
       (skip-chars-forward "^}")
-      (while (>= (car (syntax-ppss)) orig-level)
+      (while (and (>= (car (syntax-ppss)) orig-level) (not (eobp)))
         (skip-chars-forward "^}")
-        (forward-char)))))
+        (unless (eobp) (forward-char))))))
 
 ;;;###autoload
 (define-derived-mode jai-ts-mode prog-mode "Jai"

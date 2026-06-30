@@ -197,7 +197,7 @@ Sets match groups 1 = `.(', 2 = `)', 3 = the type name (last word inside)."
       (jai-ts-mode--postfix-cast-syntax
        (1 font-lock-keyword-face)
        (2 font-lock-keyword-face)
-       (3 font-lock-type-face))
+       (3 font-lock-type-face nil t))   ; laxmatch: a word-less `.()' yields a nil group 3
       ;; Compiler directives: #import #run #load #if #through …
       (,(rx "#" (+ (any alpha "_"))) . font-lock-preprocessor-face)
       ;; Notes: @note

@@ -86,5 +86,12 @@
   (should (eq 'font-lock-keyword-face
               (jai-ts-mode-tests--face-at "f :: () { defer x(); }\n" "defer"))))
 
+(ert-deftest jai-ts-mode-test-font-lock-empty-cast-no-error ()
+  "A word-less `.()' must not break font-lock (cast matcher group 3 may be nil)."
+  ;; If group 3 is nil and not laxmatched, font-lock signals and disables
+  ;; itself, so the later number never gets fontified.
+  (should (eq 'font-lock-constant-face
+              (jai-ts-mode-tests--face-at "x := foo.(); y := 42;\n" "42"))))
+
 (provide 'jai-ts-mode-tests)
 ;;; jai-ts-mode-tests.el ends here

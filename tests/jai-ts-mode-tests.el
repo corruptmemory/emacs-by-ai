@@ -115,5 +115,27 @@
     ;; the guarded version returns normally.
     (should (progn (jai-ts-mode--beginning-of-defun) t))))
 
+(ert-deftest jai-ts-mode-test-end-of-defun ()
+  "From inside a proc, end-of-defun lands on the proc's closing-brace line."
+  (with-temp-buffer
+    (jai-ts-mode)
+    (insert "foo :: () {\n    bar();\n    baz();\n}\nafter := 1;\n")
+    (goto-char (point-min))
+    (search-forward "bar")
+    (jai-ts-mode--end-of-defun)
+    (should (equal (buffer-substring-no-properties
+                    (line-beginning-position) (line-end-position))
+                   "}"))))
+
+(ert-deftest jai-ts-mode-test-end-of-defun-no-signal-malformed ()
+  "end-of-defun must not signal on a buffer with no closing brace below point."
+  (with-temp-buffer
+    (jai-ts-mode)
+    (insert "foo :: () {\n    bar(")   ; unclosed, no closing } below
+    (goto-char (point-max))
+    ;; With the unguarded inner loop this signals `end-of-buffer';
+    ;; the guarded version returns normally.
+    (should (progn (jai-ts-mode--end-of-defun) t))))
+
 (provide 'jai-ts-mode-tests)
 ;;; jai-ts-mode-tests.el ends here

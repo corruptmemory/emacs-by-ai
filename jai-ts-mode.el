@@ -149,16 +149,27 @@ cannot corrupt indentation."
     (beginning-of-line)))
 
 (defun jai-ts-mode--end-of-defun ()
-  "Move to the line on which the current procedure ends.  Adapted from jai-mode."
-  (let ((orig-level (car (syntax-ppss))))
-    (when (> orig-level 0)
-      (jai-ts-mode--beginning-of-defun)
-      (end-of-line)
-      (setq orig-level (car (syntax-ppss)))
-      (skip-chars-forward "^}")
-      (while (and (>= (car (syntax-ppss)) orig-level) (not (eobp)))
-        (skip-chars-forward "^}")
-        (unless (eobp) (forward-char))))))
+  "Move point just past the closing brace of the current procedure.
+
+This is the `end-of-defun-function': the `end-of-defun' command first moves
+point to the defun's beginning (via `beginning-of-defun-function') and THEN
+calls this to reach the end — so point arrives at the procedure's opening line,
+at brace-depth 0, NOT inside the body.  (Upstream jai-mode's version guarded on
+`(> (car (syntax-ppss)) 0)' and therefore no-op'd in exactly this case, leaving
+point stuck on the declaration line.)
+
+From the opening line, jump over the body's balanced braces with `forward-sexp'.
+The body brace is the last `{' on that line not inside a string or comment — Jai
+signatures are parenthesised and any `.{}' defaults precede the body brace."
+  (end-of-line)
+  (let (brace)
+    (while (and (not brace) (search-backward "{" (line-beginning-position) t))
+      (unless (nth 8 (syntax-ppss))      ; skip a `{' inside a string or comment
+        (setq brace t)))
+    (when brace
+      ;; `forward-sexp' signals on an unbalanced `{' (mid-edit); a no-op is the
+      ;; right degradation for navigation.
+      (ignore-errors (forward-sexp 1)))))
 
 ;;;###autoload
 (define-derived-mode jai-ts-mode prog-mode "Jai"

@@ -115,27 +115,45 @@
     ;; the guarded version returns normally.
     (should (progn (jai-ts-mode--beginning-of-defun) t))))
 
-(ert-deftest jai-ts-mode-test-end-of-defun ()
-  "From inside a proc, end-of-defun lands on the proc's closing-brace line."
+;; Drive the real COMMANDS (`end-of-defun'/`beginning-of-defun'), not the
+;; `*-function' internals directly: the command pre-positions point at the
+;; defun's beginning before calling `end-of-defun-function', and only that path
+;; exposed the contract bug where the old guard no-op'd at depth 0.  Use a proc
+;; with nested `.{}' struct literals (point at depth 2) — the shape that broke.
+(defconst jai-ts-mode-tests--two-procs
+  "add_wall :: (a: A) {\n    wall := W.{\n        mesh = m,\n    };\n}\nnext_thing :: () {\n    return;\n}\n")
+
+(ert-deftest jai-ts-mode-test-end-of-defun-command-nested ()
+  "C-M-e moves PAST a proc with nested braces, not backward to its declaration."
   (with-temp-buffer
     (jai-ts-mode)
-    (insert "foo :: () {\n    bar();\n    baz();\n}\nafter := 1;\n")
+    (insert jai-ts-mode-tests--two-procs)
     (goto-char (point-min))
-    (search-forward "bar")
-    (jai-ts-mode--end-of-defun)
+    (search-forward "mesh = m")
+    (end-of-defun)                          ; the real command, not the *-function
     (should (equal (buffer-substring-no-properties
                     (line-beginning-position) (line-end-position))
-                   "}"))))
+                   "next_thing :: () {"))))
 
-(ert-deftest jai-ts-mode-test-end-of-defun-no-signal-malformed ()
-  "end-of-defun must not signal on a buffer with no closing brace below point."
+(ert-deftest jai-ts-mode-test-beginning-of-defun-command-nested ()
+  "C-M-a from a deep line lands on the enclosing proc's declaration."
   (with-temp-buffer
     (jai-ts-mode)
-    (insert "foo :: () {\n    bar(")   ; unclosed, no closing } below
+    (insert jai-ts-mode-tests--two-procs)
+    (goto-char (point-min))
+    (search-forward "mesh = m")
+    (beginning-of-defun)                    ; the real command
+    (should (equal (buffer-substring-no-properties
+                    (line-beginning-position) (line-end-position))
+                   "add_wall :: (a: A) {"))))
+
+(ert-deftest jai-ts-mode-test-end-of-defun-command-no-signal-malformed ()
+  "The `end-of-defun' command must not signal on an unclosed proc."
+  (with-temp-buffer
+    (jai-ts-mode)
+    (insert "foo :: () {\n    bar(")        ; unclosed, no closing } below
     (goto-char (point-max))
-    ;; With the unguarded inner loop this signals `end-of-buffer';
-    ;; the guarded version returns normally.
-    (should (progn (jai-ts-mode--end-of-defun) t))))
+    (should (progn (end-of-defun) t))))
 
 (provide 'jai-ts-mode-tests)
 ;;; jai-ts-mode-tests.el ends here

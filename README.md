@@ -195,7 +195,7 @@ curl -fsSL https://raw.githubusercontent.com/sindresorhus/github-markdown-css/ma
 
 ## Additional packages
 
-- **vterm** — full terminal emulator inside Emacs (fish shell, 10k scrollback)
+- **ghostel** — terminal emulator built on `libghostty-vt` (the VT engine from the Ghostty terminal); fish shell, 5MB scrollback. Prebuilt native module auto-downloads once per machine on first config load — no cmake/libtool/C-compiler toolchain required (unlike vterm). `M-x ghostel` to open.
 - **editorconfig** — automatically applies `.editorconfig` project settings
 - **flyspell** — spell checking in text-like modes only (text, org, markdown)
 - **harper** — grammar/spell checking LSP for org, markdown, and text modes via eglot
@@ -242,7 +242,6 @@ Run `M-x all-the-icons-install-fonts` once after first install for icon support.
 | `fish-lsp`                        | Fish LSP                                          |
 | `aspell` or `hunspell`            | flyspell spell checking                           |
 | `cmark-gfm`                       | Markdown preview (`pacman -S cmark-gfm` on Arch)  |
-| `cmake`, `libtool`, C compiler    | vterm module compilation (first use)              |
 | `poppler` (dev libs)              | pdf-tools `epdfinfo` build (first use)            |
 | `docker`                          | docker.el container/image management              |
 | `harper-ls`                       | Grammar/spell checking for writing modes (`pacman -S harper`) |

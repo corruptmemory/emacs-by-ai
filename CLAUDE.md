@@ -35,7 +35,7 @@ The file is organized in this order:
 9. **In-buffer completion** — Corfu (+ history, popupinfo), tempel, cape, kind-icon
 10. **Editing packages** — multiple-cursors (with symbol-aware mark/skip bindings), expand-region, string-inflection, smartparens, flyspell (text-like modes only: text, org, markdown)
 11. **Git** — Magit, diff-hl (with flydiff for unsaved-change indicators)
-12. **Popup/buffer management** — Popper with project-based grouping, helpful, vterm
+12. **Popup/buffer management** — Popper with project-based grouping, helpful; `ghostel` (libghostty-vt-backed terminal, replaces vterm) declared separately
 13. **Dev tooling** — treesit-auto, yasnippet, eglot (20+ language hooks, autoreconnect, harper-ls for writing modes), eglot-booster, consult-eglot, eldoc-box, flymake, dape (DAP)
 14. **Language configs** — Go (format-on-save, gotest, dape/Delve wrappers with auto-breakpoint), SQL (xref helpers, completion), docker, pdf-tools, compile-mode tweaks (ANSI color + Jai `line,column` error navigation — see below), then all other languages
 15. **AI writing assistant** — `cm/ai-*` exchange protocol for Claude Code integration (`C-c a` prefix), shared via `~/.emacs-ai/`, interactive `*ai-suggestions*` review buffer (`C-c a S`)

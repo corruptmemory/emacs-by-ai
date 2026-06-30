@@ -70,8 +70,10 @@
 (setq confirm-kill-emacs nil)
 
 ;;;; Shell configuration — use fish where appropriate.
+;; bash for non-interactive `shell-command' (predictable scripts); fish for
+;; the interactive `M-x shell' buffer.  The terminal emulator's shell is
+;; configured in its own use-package block (see `ghostel-shell' below).
 (setq shell-file-name (executable-find "bash"))
-(setq-default vterm-shell "/usr/bin/fish")
 (setq-default explicit-shell-file-name "/usr/bin/fish")
 
 ;;;; Auto-revert buffers when files change on disk.
@@ -810,10 +812,22 @@ Seeding is skipped for multi-line or very large regions."
   (popper-mode)
   (popper-echo-mode))
 
-;;;; vterm — terminal emulator.
-(use-package vterm
+;;;; ghostel — terminal emulator built on libghostty-vt.
+;; Replaces vterm.  Default scrollback is 5MB — far more generous than vterm's
+;; per-line cap, so no explicit override is needed.  Shell integration
+;; (directory tracking, prompt navigation) is on by default for bash/zsh/fish.
+;;
+;; The prebuilt native module is fetched once per machine.  Upstream defers
+;; the download to the first `M-x ghostel' and leaves a warning otherwise;
+;; we trigger it at config-load time so a fresh clone just works.
+;; `ghostel-download-module' is interactive but only prompts when overwriting
+;; an existing module, so a clean first-install call is silent.
+(use-package ghostel
   :custom
-  (vterm-max-scrollback 10000))
+  (ghostel-shell "/usr/bin/fish")
+  :config
+  (unless (featurep 'ghostel-module)
+    (ignore-errors (ghostel-download-module))))
 
 ;;;; diff-hl — highlight uncommitted changes in the fringe.
 (use-package diff-hl

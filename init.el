@@ -288,6 +288,10 @@
 ;; the other prose wiring.
 (add-hook 'text-mode-hook #'visual-line-mode)
 
+;; Olivetti — centered text with configurable body width.  Deliberately not
+;; hooked into any mode; flip on per-buffer with `C-c T o' when wanted.
+(use-package olivetti)
+
 ;;;; Smooth scrolling (built-in pixel precision + horizontal wheel support).
 (defun cm/apply-scrolling-profile ()
   "Apply scrolling settings from `cm/mouse-profile'."
@@ -373,6 +377,7 @@ Preserves buffer contents, scroll positions, and selection."
 (define-key cm/toggles-map (kbd "s") #'whitespace-mode)
 (define-key cm/toggles-map (kbd "f") #'flyspell-mode)
 (define-key cm/toggles-map (kbd "p") #'mixed-pitch-mode)
+(define-key cm/toggles-map (kbd "o") #'olivetti-mode)
 (defun cm/toggle-scrolling-profile ()
   "Toggle `cm/mouse-profile' between `trackpad' and `wheel' and re-apply."
   (interactive)

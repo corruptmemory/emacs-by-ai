@@ -29,10 +29,16 @@
 (defvar jai-ts-mode-syntax-table
   (let ((table (make-syntax-table)))
     (modify-syntax-entry ?/ ". 124b" table)   ; C-style // and /* */ comments
-    (modify-syntax-entry ?* ". 23"   table)
+    (modify-syntax-entry ?* ". 23n"  table)   ; `n' = Jai block comments NEST
     (modify-syntax-entry ?\n "> b"   table)
+    (modify-syntax-entry ?\^m "> b"  table)   ; end comments on CRLF too
     (modify-syntax-entry ?_ "w"      table)   ; underscores are word chars
     (modify-syntax-entry ?\" "\""    table)
+    (modify-syntax-entry ?\\ "\\"    table)   ; backslash escapes in strings
+    ;; Operators/quote as punctuation, so a stray one can't fool `syntax-ppss'
+    ;; (which now drives indentation).
+    (dolist (c '(?' ?: ?+ ?- ?% ?& ?| ?^ ?! ?= ?< ?> ??))
+      (modify-syntax-entry c "." table))
     table)
   "Syntax table for `jai-ts-mode'.")
 

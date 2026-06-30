@@ -35,5 +35,16 @@
     (should (equal (jai-ts-mode-tests--reindent "f :: () {\nx := 1;\n}\n")
                    "f :: () {\n  x := 1;\n}\n"))))
 
+(ert-deftest jai-ts-mode-test-nested-block-comments ()
+  "Jai's /* */ comments NEST: an inner */ does not end the outer comment."
+  (with-temp-buffer
+    (jai-ts-mode)
+    (insert "x /* a /* b */ c */ y\n")
+    (goto-char (point-min))
+    (search-forward "c")
+    (should (nth 4 (syntax-ppss)))        ; still inside the outer comment
+    (search-forward "y")
+    (should-not (nth 4 (syntax-ppss)))))  ; outside after both closers
+
 (provide 'jai-ts-mode-tests)
 ;;; jai-ts-mode-tests.el ends here

@@ -67,6 +67,28 @@ Chunk-based word motion and deletion (`cm/move-right`, `cm/move-left`, `cm/backw
 
 `compilation-mode` renders ANSI color (via `ansi-color-compilation-filter`) instead of leaking raw escape codes, and recognizes Jai's `file:line,column` diagnostic format so `next-error` (`<f9>`/`<f10>`) jumps to Jai compile errors — the stock `gnu` matcher only handles `file:line:column`.
 
+## Jai editing (`jai-ts-mode`)
+
+`jai-ts-mode` gives Jai a real editing experience with no tree-sitter and no LSP
+(the `jails` server is deliberately left unwired — flaky and slow). Indentation,
+here-string handling, defun navigation, and several font-lock matchers are
+adapted from upstream [`valignatev/jai-mode`](https://github.com/valignatev/jai-mode)
+(GPLv3; credited in the file header).
+
+- **Indentation** uses js-mode's C-style `js-indent-line` (Jai is
+  brace-structured): bodies indent, closers dedent, `(`-continuations align.
+  Offset is `jai-ts-mode-indent-offset` (default 4). js-mode's C-preprocessor
+  handling — which otherwise crashes on Jai `#`-directives — is neutralised by a
+  dynamically-scoped `let`, confined to Jai indentation so other languages'
+  js-mode usage is untouched.
+- **Nested block comments** (`/* /* */ */`), **`#string` here-strings** (their
+  braces don't corrupt indentation), **rich font-lock** (casts `foo.(Type)`,
+  `.{}`/`.[]`, `@notes`, `$T`, numbers, char literals, `---`, keywords), and
+  **`beginning/end-of-defun`** navigation.
+
+ERT suite: `tests/jai-ts-mode-tests.el`. Design + plan under
+`docs/plans/2026-06-29-jai-ts-mode-indentation-*`.
+
 ## Project TAGS
 
 If a project root holds a build-generated `TAGS` index, it is loaded

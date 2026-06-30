@@ -14,7 +14,7 @@ emacs --init-directory=~/projects/emacs-again/
 
 - `early-init.el` — GC tuning, UI suppression, native-comp settings, fringe/cursor config
 - `init.el` — Package management (straight.el + use-package), all packages, keybindings, language configs
-- `jai-ts-mode.el` — Jai major mode (regex font-lock + syntax table; tree-sitter intentionally not used — see below)
+- `jai-ts-mode.el` — Jai major mode (`js-indent-line` indentation, regex font-lock, nested-comment/here-string syntax, defun navigation; tree-sitter intentionally not used — see below)
 - `themes/` — Custom color themes (Dracula Pro Blade/Pro, Naysayer)
 - `vendor/` — Upstream assets vendored as plain text, refreshed on demand (currently: `github-markdown.css` for the markdown preview)
 - `local-settings.el` — Machine-specific overrides (git-ignored); sets `cm/mouse-profile` etc.
@@ -77,7 +77,53 @@ emacs --batch --init-directory=~/projects/emacs-again -l init.el --eval '
 
 ## Jai and Tree-Sitter
 
-`jai-ts-mode.el` deliberately does **not** use tree-sitter. Jai's bracketed/unbracketed control flow variants (every control form has both `if x { }` and `if x stmt;` styles) cause the LR automaton state count to exceed tree-sitter's hard-coded 64K limit. Multiple serious attempts to build a complete grammar failed for this reason. The best available grammar (`overlord-systems/jai-tree-sitter`) only parses variable declarations and produces ERROR nodes for nearly all real code. Syntax highlighting uses regex font-lock instead.
+`jai-ts-mode.el` deliberately does **not** use tree-sitter. Jai's bracketed/unbracketed control flow variants (every control form has both `if x { }` and `if x stmt;` styles) cause the LR automaton state count to exceed tree-sitter's hard-coded 64K limit. Multiple serious attempts to build a complete grammar failed for this reason. The best available grammar (`overlord-systems/jai-tree-sitter`) only parses variable declarations and produces ERROR nodes for nearly all real code. Indentation, font-lock, and navigation are therefore hand-rolled (see next section).
+
+## Jai editing (`jai-ts-mode`)
+
+Beyond regex font-lock, `jai-ts-mode` provides a real editing experience without
+tree-sitter or an LSP. Indentation, here-string handling, defun navigation, and
+several font-lock matchers are adapted from the mature upstream
+[`valignatev/jai-mode`](https://github.com/valignatev/jai-mode) (GPLv3; an
+attribution header in the file records this — lifting that code makes the file
+effectively GPLv3 if the repo is ever published).
+
+- **Indentation** is `js-indent-line` (js-mode's C-style engine — Jai is
+  brace-structured, so it indents bodies, dedents closers, and aligns
+  `(`-continuations). The offset is `jai-ts-mode-indent-offset` (a `defcustom`,
+  default 4, `:safe`), read into `js-indent-level` at mode activation. **Key
+  gotcha:** js-mode's `js--proper-indentation` treats `#`-led lines as C
+  preprocessor macros and references `cpp-font-lock-keywords-source-directives`,
+  which is *unbound* in Emacs 30.2 — so a naive `js-indent-line` signals
+  `void-variable` on any Jai `#import`/`#run`/`#if`. `jai-ts-mode--indent-line`
+  fixes this by **dynamically `let`-binding** the three js internals
+  (`js--opt-cpp-start`, `js--macro-decl-re`,
+  `cpp-font-lock-keywords-source-directives`) to an impossible regex
+  (`"\\_<\\_>"`) for the extent of the call. A bare `(defvar
+  cpp-font-lock-keywords-source-directives)` (declaration, **no value**) makes
+  the third symbol special so the `let` actually binds it in this
+  lexical-binding file. Upstream clobbers these with global `defconst`s; we
+  confine the neutering to Jai indentation so js-mode buffers elsewhere are
+  untouched.
+- **Syntax table:** Jai's `/* */` block comments **nest** (`?* ". 23n"`), unlike
+  C; operator/quote chars are punctuation so a stray one can't fool
+  `syntax-ppss` (which drives indentation).
+- **Here-strings:** `jai-ts-mode--syntax-propertize-function` marks `#string TAG
+  … TAG` heredoc bodies as strings, so braces inside them don't corrupt nesting
+  depth (an indentation-correctness fix, not just cosmetics).
+- **Font-lock** covers postfix casts `foo.(Type)`, `.{}`/`.[]` literal types,
+  `@notes`, `$T` polymorphs, numbers, char literals, `---`, and a rich keyword
+  set, alongside the kept `NOTE/TODO/FIXME/HACK/XXX` rule and the precise
+  proc/`struct`/`enum`/`union` name rules. The general `x: Type` rule carries a
+  documented false-positive caveat (it mis-highlights `for it_index, it: foo` —
+  Emacs regex has no negative lookahead).
+- **Navigation:** `beginning/end-of-defun` (`C-M-a`/`C-M-e`/`narrow-to-defun`),
+  with BOB/EOB guards so they never signal on malformed/mid-edit buffers.
+- **Not changed:** the detailed imenu generic expression, the `jai-ts-mode` name,
+  and the deliberate no-`jails`/no-tree-sitter stance.
+
+Design + plan: `docs/plans/2026-06-29-jai-ts-mode-indentation-{design,plan}.md`.
+ERT suite: `tests/jai-ts-mode-tests.el` (`./tests/run-tests.sh`).
 
 ## Compilation buffers
 

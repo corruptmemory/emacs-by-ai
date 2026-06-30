@@ -460,10 +460,15 @@ Sets match groups 1 = `.(', 2 = `)', 3 = the type name (last word inside)."
                     "s8" "s16" "s32" "s64" "u8" "u16" "u32" "u64"
                     "Any" "Type" "Code")))
     `(;; Postfix cast `foo.(Type)' — first, so it wins priority.
+      ;; Group 3 (the type) is laxmatched (`nil t'): a word-less `.()' (which
+      ;; electric-pair produces the instant you type `foo.(') yields a nil group
+      ;; 3, and without laxmatch font-lock signals "No match 3 in highlight" and
+      ;; disables itself.  [Amended post-review — the original brief omitted the
+      ;; laxmatch; see commit 9e985bb.]
       (jai-ts-mode--postfix-cast-syntax
        (1 font-lock-keyword-face)
        (2 font-lock-keyword-face)
-       (3 font-lock-type-face))
+       (3 font-lock-type-face nil t))
       ;; Compiler directives: #import #run #load #if #through …
       (,(rx "#" (+ (any alpha "_"))) . font-lock-preprocessor-face)
       ;; Notes: @note

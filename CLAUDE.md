@@ -27,7 +27,7 @@ The file is organized in this order:
 1. **Startup/bootstrap** — timing display, straight.el bootstrap, use-package integration
 2. **Core settings** — custom file, local overrides, backups, auto-revert, delete-selection, electric-indent, electric-pair (auto-close + brace expansion on RET), tabs, performance (bidi off, skip fontification on input, 4MB process buffer), kill ring (clipboard preservation, dedup), editing niceties (auto-chmod scripts, no ffap pings, string re-builder syntax, auto-select help windows, repeat mark popping), recentf, saveplace (with recenter after restore), per-instance server (PID-named, stale socket cleanup)
 3. **PATH** — adds ~/.cargo/bin, ~/.local/bin, ~/go/bin, ~/projects/Odin, ~/projects/ols to exec-path
-4. **Theme and fonts** — loads dracula-pro-blade, sets TX-02/Fira Sans/JoyPixels, auto-adjusts fringe contrast
+4. **Theme and fonts** — loads dracula-pro-blade with fringe-contrast advice; `fontaine` presets (TX-02 mono + Inter variable + JoyPixels emoji); `mixed-pitch-mode` auto-enabled in prose modes with `C-c T p` toggle; shared heading-scale machinery for org + markdown
 5. **Scrolling** — pixel-scroll-precision-mode with wheel/trackpad profiles driven by `cm/mouse-profile`; trackpad flips horizontal scroll and disables interpolated page scroll for instant PgUp/PgDn
 6. **Keybindings and editing** — winner-mode (layout undo/redo, reversible `C-x 1`), proportional window resizing, windmove, quick toggles (`C-c T` prefix), chunk word motion (`cm/` prefix), line movement, sexp navigation
 7. **Minibuffer completion** — Vertico (+ directory, repeat, multiform extensions), Orderless, Marginalia, savehist, prescient
@@ -54,6 +54,16 @@ The file is organized in this order:
 ## Themes
 
 All themes in `themes/` follow the standard Emacs pattern: `deftheme` → color definitions → `custom-theme-set-faces` → `provide-theme`. Dracula themes use `let`-bound alists with GUI/256/TTY color entries and support `defcustom` options for heading sizes and mode-line styles. When adding faces, follow the existing `(,face ((,class (:foreground ,color ...))))` pattern within the `let` block.
+
+## Fonts
+
+Two-layer setup. **`fontaine`** owns the global font triplet (`default` / `fixed-pitch` / `variable-pitch`) via named presets — switch at runtime with `M-x fontaine-set-preset` (currently `regular` (TX-02 14pt) and `large` (17pt)). **`mixed-pitch-mode`** runs on a hook list (`markdown-mode`, `gfm-mode`, `org-mode`, `text-mode`, `Info-mode`, `helpful-mode`, `help-mode`, `eww-mode`) and buffer-locally remaps the `default` face to `variable-pitch`. Faces inheriting from `fixed-pitch` (markdown code/tables/fences, org code/verbatim, org-meta-line) stay monospaced automatically — that's the whole reason this works. The pitch toggle is `C-c T p`.
+
+**The `org-table` exception:** unlike `markdown-table-face`, `org-table` does NOT inherit `fixed-pitch` by default — under bare `mixed-pitch-mode` it would render proportionally and re-recompute column widths on every keystroke, mangling alignment. The fix is one `(add-to-list 'mixed-pitch-fixed-pitch-faces 'org-table)` in the `mixed-pitch` `:config` block — that adds `org-table` to the "keep these fixed" override list, no per-cell hooks needed.
+
+**Inter on Arch:** the system ships only the modern variable font `Inter[opsz,wght].ttf` — there is no separate `Inter Display` family. The opsz axis handles optical-size adaptation internally when the font engine asks for a large size. Don't request `"Inter Display"` as a family name; fontaine would silently fall back.
+
+**Heading scale.** `cm/heading-scale-factor` (default 1.2) multiplies the *theme-baseline* heights of `org-level-*` and `markdown-header-face-*`. Baselines are captured once per group on first apply and re-captured after any `load-theme` (`:after` advice on `load-theme`), so repeated calls never compound (1.2 × 1.2 = 1.44 trap). The captured-baseline alist is `cm/heading-base-heights`, keyed by group symbol (`org`, `markdown`) — adding a new scaled mode means: define the face list, write a `cm/X-apply-heading-scale` wrapper calling `cm/apply-heading-scale 'X faces`, hook it into the mode, and add it to `cm/refresh-heading-scale`.
 
 ## Custom LSP Servers
 

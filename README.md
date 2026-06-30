@@ -51,7 +51,7 @@ Dape (DAP client) with custom Go/Delve wrappers that use the DAP protocol (`dlv 
 
 ## Custom editing commands
 
-Chunk-based word motion and deletion (`cm/move-right`, `cm/move-left`, `cm/backward-delete-word`, `cm/delete-word`) bound to `C-<arrow>` and `C-<backspace>`/`C-<delete>`. Line transposition via `cm/move-line-up`/`cm/move-line-down` on `M-<up>`/`M-<down>`. Toggle window split orientation with `cm/toggle-window-split` (`C-c |`). Quick toggles under `C-c T`: word wrap (`w`), truncate lines (`t`), whitespace (`s`), flyspell (`f`), mouse profile (`m`). Multiple-cursors includes symbol-aware mark (`C-M->`, `C-M-<`), skip (`C-"`, `C-:`), and `mc/edit-lines` (`C-S-c C-S-c`).
+Chunk-based word motion and deletion (`cm/move-right`, `cm/move-left`, `cm/backward-delete-word`, `cm/delete-word`) bound to `C-<arrow>` and `C-<backspace>`/`C-<delete>`. Line transposition via `cm/move-line-up`/`cm/move-line-down` on `M-<up>`/`M-<down>`. Toggle window split orientation with `cm/toggle-window-split` (`C-c |`). Quick toggles under `C-c T`: word wrap (`w`), truncate lines (`t`), whitespace (`s`), flyspell (`f`), mouse profile (`m`), mixed-pitch / proportional font (`p`). Multiple-cursors includes symbol-aware mark (`C-M->`, `C-M-<`), skip (`C-"`, `C-:`), and `mc/edit-lines` (`C-S-c C-S-c`).
 
 ## Function keys
 
@@ -194,9 +194,15 @@ curl -fsSL https://raw.githubusercontent.com/sindresorhus/github-markdown-css/ma
 
 ## Fonts
 
-- **Monospace:** TX-02
-- **Variable-pitch:** Fira Sans
+Managed via [`fontaine`](https://github.com/protesilaos/fontaine) — named presets that swap the `default` / `fixed-pitch` / `variable-pitch` triplet together (`M-x fontaine-set-preset`).
+
+- **Monospace** (`default`, `fixed-pitch`): TX-02
+- **Variable-pitch:** Inter
 - **Emoji:** JoyPixels
+
+Prose modes (markdown, gfm, org, text, Info, help/helpful, eww) get [`mixed-pitch-mode`](https://gitlab.com/jabranham/mixed-pitch) automatically — it remaps the buffer's default to the variable-pitch face while leaving anything that inherits from `fixed-pitch` alone. Result: prose flows in Inter; inline code, fenced blocks, and tables stay in TX-02. Org tables are remapped explicitly (`org-table` doesn't inherit `fixed-pitch` by default). Per-buffer toggle: `C-c T p`.
+
+Heading sizes in markdown and org are scaled by `cm/heading-scale-factor` (1.2× by default) from the theme baseline; theme changes re-capture the baseline so scaling never compounds.
 
 Run `M-x all-the-icons-install-fonts` once after first install for icon support.
 

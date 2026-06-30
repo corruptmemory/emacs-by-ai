@@ -232,11 +232,50 @@
 (advice-add 'load-theme :after #'cm/apply-complementary-fringe-background)
 (cm/apply-complementary-fringe-background)
 
-;;;; Fonts.
-;;(set-face-attribute 'default nil :family "TX-02" :height 130)
-(set-face-attribute 'default nil :font "TX-02-14")
-(set-face-attribute 'variable-pitch nil :family "Fira Sans" :height 130)
+;;;; Fonts — fontaine presets manage the default/fixed-pitch/variable-pitch
+;;;; triplet together.  TX-02 stays the monospace; Inter is the variable
+;;;; (proportional) face.  `mixed-pitch-mode' (configured further down)
+;;;; flips `default' to `variable-pitch' buffer-locally in prose modes, while
+;;;; faces that inherit from `fixed-pitch' (code, tables, fences) stay mono.
+(use-package fontaine
+  :custom
+  (fontaine-presets
+   '((regular
+      :default-family "TX-02"
+      :default-height 140
+      :fixed-pitch-family "TX-02"
+      :fixed-pitch-height 1.0
+      :variable-pitch-family "Inter"
+      :variable-pitch-height 1.0
+      :line-spacing 0.1)
+     (large
+      :inherit regular
+      :default-height 170)
+     (t
+      :default-weight regular
+      :variable-pitch-weight regular
+      :bold-weight bold)))
+  :config
+  (fontaine-mode 1)
+  (fontaine-set-preset 'regular))
+
 (set-fontset-font t 'emoji (font-spec :family "JoyPixels") nil 'prepend)
+
+;; Proportional-text buffers: remap `default' to `variable-pitch'; faces that
+;; inherit from `fixed-pitch' (markdown code/tables, org code/verbatim) stay
+;; monospaced.  Org's `org-table' face does NOT inherit fixed-pitch by default,
+;; so org tables would mis-align under proportional — remap it explicitly.
+(use-package mixed-pitch
+  :hook ((markdown-mode . mixed-pitch-mode)
+         (gfm-mode      . mixed-pitch-mode)
+         (org-mode      . mixed-pitch-mode)
+         (text-mode     . mixed-pitch-mode)
+         (Info-mode     . mixed-pitch-mode)
+         (helpful-mode  . mixed-pitch-mode)
+         (help-mode     . mixed-pitch-mode)
+         (eww-mode      . mixed-pitch-mode))
+  :config
+  (add-to-list 'mixed-pitch-fixed-pitch-faces 'org-table))
 
 ;;;; Smooth scrolling (built-in pixel precision + horizontal wheel support).
 (defun cm/apply-scrolling-profile ()
@@ -322,6 +361,7 @@ Preserves buffer contents, scroll positions, and selection."
 (define-key cm/toggles-map (kbd "t") #'toggle-truncate-lines)
 (define-key cm/toggles-map (kbd "s") #'whitespace-mode)
 (define-key cm/toggles-map (kbd "f") #'flyspell-mode)
+(define-key cm/toggles-map (kbd "p") #'mixed-pitch-mode)
 (defun cm/toggle-scrolling-profile ()
   "Toggle `cm/mouse-profile' between `trackpad' and `wheel' and re-apply."
   (interactive)
@@ -1455,6 +1495,8 @@ With prefix argument REFRESH, rebuild completion cache first."
 ;;     -o vendor/github-markdown.css
 (use-package markdown-mode
   :mode ("\\.md\\'" . gfm-mode)
+  :hook ((markdown-mode . cm/markdown-apply-heading-scale)
+         (gfm-mode      . cm/markdown-apply-heading-scale))
   :custom
   (markdown-fontify-code-blocks-natively t)
   (markdown-command "cmark-gfm -e table -e strikethrough -e autolink -e tasklist")
@@ -1558,46 +1600,72 @@ With prefix argument REFRESH, rebuild completion cache first."
    (org-mode . org-indent-mode)
    (org-mode . cm/org-apply-heading-scale)))
 
-;;;; org heading sizing.
-(defvar cm/org-heading-scale-factor 1.2
-  "Multiplier used to enlarge org heading faces.")
+;;;; Heading sizing — shared machinery for org and markdown.
+;; Captures each face group's baseline height once, then scales from that
+;; baseline.  Without the captured baseline a re-invocation would compound the
+;; scale (1.2 * 1.2 = 1.44).  The :after advice on `load-theme' invalidates
+;; the cache so a new theme's defaults become the new baseline.
+(defvar cm/heading-scale-factor 1.2
+  "Multiplier used to enlarge heading faces.")
 
-(defvar cm/org-heading-base-heights nil
-  "Original org heading heights captured from the active theme.")
+(defvar cm/heading-base-heights nil
+  "Alist of (GROUP . ((FACE . HEIGHT) ...)) capturing theme-default heights.
+GROUP is a symbol such as `org' or `markdown' identifying the face group;
+clearing an entry (or the whole alist) forces re-capture on next apply.")
 
-(defun cm/org-heading-faces-ready-p (faces)
+(defun cm/heading-faces-ready-p (faces)
   "Return non-nil when every face in FACES has been defined."
   (catch 'missing
     (dolist (face faces t)
       (unless (facep face)
         (throw 'missing nil)))))
 
+(defun cm/apply-heading-scale (group faces)
+  "Scale FACES (under GROUP key) by `cm/heading-scale-factor'.
+GROUP namespaces the captured baselines so multiple modes can be scaled
+independently without cross-contamination."
+  (when (cm/heading-faces-ready-p faces)
+    (unless (assq group cm/heading-base-heights)
+      (push (cons group
+                  (mapcar (lambda (face)
+                            (cons face (face-attribute face :height nil 'default)))
+                          faces))
+            cm/heading-base-heights))
+    (dolist (entry (cdr (assq group cm/heading-base-heights)))
+      (let ((face (car entry))
+            (height (cdr entry)))
+        (when (numberp height)
+          (set-face-attribute
+           face nil :height
+           (truncate (* (if (integerp height) height (* 100 height))
+                        cm/heading-scale-factor))))))))
+
+(defconst cm/org-heading-faces
+  '(org-level-1 org-level-2 org-level-3 org-level-4
+                org-level-5 org-level-6 org-level-7 org-level-8))
+
+(defconst cm/markdown-heading-faces
+  '(markdown-header-face-1 markdown-header-face-2 markdown-header-face-3
+                           markdown-header-face-4 markdown-header-face-5
+                           markdown-header-face-6))
+
 (defun cm/org-apply-heading-scale ()
-  "Scale `org-level-*' faces by `cm/org-heading-scale-factor'."
-  (let ((faces '(org-level-1 org-level-2 org-level-3 org-level-4
-                             org-level-5 org-level-6 org-level-7 org-level-8)))
-    (when (cm/org-heading-faces-ready-p faces)
-      (unless cm/org-heading-base-heights
-        (setq cm/org-heading-base-heights
-              (mapcar (lambda (face)
-                        (cons face (face-attribute face :height nil 'default)))
-                      faces)))
-      (dolist (entry cm/org-heading-base-heights)
-        (let ((face (car entry))
-              (height (cdr entry)))
-          (when (numberp height)
-            (set-face-attribute
-             face nil :height
-             (truncate (* (if (integerp height) height (* 100 height))
-                          cm/org-heading-scale-factor)))))))))
+  "Scale org heading faces; hooked into `org-mode'."
+  (cm/apply-heading-scale 'org cm/org-heading-faces))
 
-(defun cm/org-refresh-heading-scale (&rest _)
-  "Recompute and apply org heading scale after theme changes."
-  (setq cm/org-heading-base-heights nil)
-  (cm/org-apply-heading-scale))
+(defun cm/markdown-apply-heading-scale ()
+  "Scale markdown heading faces; hooked into `markdown-mode'/`gfm-mode'."
+  (cm/apply-heading-scale 'markdown cm/markdown-heading-faces))
 
-(advice-add 'load-theme :after #'cm/org-refresh-heading-scale)
+(defun cm/refresh-heading-scale (&rest _)
+  "Drop captured baselines and re-apply scaling for all known groups."
+  (setq cm/heading-base-heights nil)
+  (cm/org-apply-heading-scale)
+  (cm/markdown-apply-heading-scale))
+
+(advice-add 'load-theme :after #'cm/refresh-heading-scale)
 (cm/org-apply-heading-scale)
+(cm/markdown-apply-heading-scale)
 
 (setq shift-select-mode 'permanent)
 

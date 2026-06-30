@@ -116,10 +116,10 @@ They must be rebuilt for 0.25.
 
 ```bash
 # Delete all existing grammars
-rm ~/projects/emacs-again/tree-sitter/*.so
+rm ~/.config/emacs/tree-sitter/*.so
 
 # Rebuild via treesit-auto
-emacs --batch --init-directory=~/projects/emacs-again -l init.el --eval '
+emacs --batch --init-directory=~/.config/emacs -l init.el --eval '
 (progn
   (require (quote treesit-auto))
   (treesit-auto-install-all)
@@ -148,7 +148,7 @@ compatibility.
 ### Step 6: Verify
 
 ```bash
-emacs --batch --init-directory=~/projects/emacs-again -l init.el --eval '
+emacs --batch --init-directory=~/.config/emacs -l init.el --eval '
 (progn
   (dolist (test (quote (("Go" go-ts-mode "package main\nfunc main() { make([]int, 0) }\n")
                         ("C" c-ts-mode "#include <stdio.h>\nint main() { return 0; }\n")

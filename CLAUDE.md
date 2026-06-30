@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Personal Emacs configuration. Requires Emacs 29+. No build system. Most `.el` files are loaded directly by Emacs; `cm-project-roots.el` has an ERT suite under `tests/` (run `./tests/run-tests.sh`). Test changes with:
 
 ```sh
-emacs --init-directory=~/projects/emacs-again/
+emacs --init-directory=~/.config/emacs/
 ```
 
 ## Key Files
@@ -85,8 +85,8 @@ Slang (`slangd`, shader-slang.org) uses [`K1ngst0m/slang-mode`](https://github.c
 Tree-sitter grammars live in `tree-sitter/` (not checked into git — rebuilt per machine). To rebuild all grammars:
 
 ```bash
-rm ~/projects/emacs-again/tree-sitter/*.so
-emacs --batch --init-directory=~/projects/emacs-again -l init.el --eval '
+rm ~/.config/emacs/tree-sitter/*.so
+emacs --batch --init-directory=~/.config/emacs -l init.el --eval '
 (progn (require (quote treesit-auto)) (treesit-auto-install-all))'
 ```
 

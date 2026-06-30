@@ -263,6 +263,29 @@
 
 (set-fontset-font t 'emoji (font-spec :family "JoyPixels") nil 'prepend)
 
+;; Startup-race workaround: `fontaine-set-preset' calls `set-face-attribute'
+;; on `default' (and friends), which cascades face-spec recomputation across
+;; every face that inherits from default — i.e. all `font-lock-*-face's.  If
+;; that cascade lands after the initial display of buffers visible at
+;; startup (most reliably *scratch*), they render with no font-lock applied
+;; until the next redisplay (any key event).  Symptom is intermittent (~1 in
+;; 5 starts) because it depends on whether init finishes before or after the
+;; first display pass.  Force a synchronous re-fontify at end of init so the
+;; user never sees the un-fontified state.  Skip internal buffers (leading
+;; space in name) to avoid touching daemon/server bookkeeping buffers.
+(defun cm/refontify-user-buffers ()
+  "Force `font-lock-ensure' on every user buffer that has font-lock on.
+Workaround for the fontaine/face-cascade race that occasionally leaves
+*scratch* (and other startup-visible buffers) un-fontified."
+  (dolist (buf (buffer-list))
+    (with-current-buffer buf
+      (when (and font-lock-mode
+                 (not (string-prefix-p " " (buffer-name))))
+        (font-lock-flush)
+        (font-lock-ensure)))))
+
+(add-hook 'after-init-hook #'cm/refontify-user-buffers)
+
 ;; Proportional-text buffers: remap `default' to `variable-pitch'; faces that
 ;; inherit from `fixed-pitch' (markdown code/tables, org code/verbatim) stay
 ;; monospaced.  Org's `org-table' face does NOT inherit fixed-pitch by default,

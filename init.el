@@ -1500,6 +1500,13 @@ With prefix argument REFRESH, rebuild completion cache first."
 ;;;; CMake.
 ;; cmake-ts-mode is built-in; cmake-language-server is eglot's default.
 
+;;;; edit-indirect — generic "edit region in indirect buffer" machinery.
+;; markdown-mode treats this as a soft dependency: `markdown-edit-code-block'
+;; (which our `C-c '' dispatch delegates to) `require's it lazily and falls
+;; back to a `package-install' prompt — bypassing straight.el — if absent.
+;; Declaring it here lets straight own the install so the prompt never fires.
+(use-package edit-indirect)
+
 ;;;; Markdown.
 ;; Pretty GitHub-style preview via cmark-gfm.  Output is wrapped in
 ;; <article class="markdown-body"> so sindresorhus/github-markdown-css

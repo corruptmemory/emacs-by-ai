@@ -173,6 +173,17 @@ Opt-in commands that run search and navigation across directories listed in a `.
 
 `C-u` before `j`/`r` forces the grep/dumb-jump fallback (skips Eglot). Implemented in `cm-project-roots.el`; ERT tests under `tests/` (`./tests/run-tests.sh`).
 
+## Edit thing at point
+
+Context-aware "edit this construct in isolation" for markdown and org buffers:
+
+| Mode         | `C-c '`                                                                       | `C-c "`                       |
+|--------------|-------------------------------------------------------------------------------|-------------------------------|
+| markdown/gfm | code block → upstream popup in language mode; table → narrow with truncation save; else error | same as `C-c '` on a table   |
+| org          | unchanged (`org-edit-special`: src popup, formula editor on tables, latex env, …) | narrow current table with truncation save |
+
+When narrowed to a table, `visual-line-mode` is turned off and `truncate-lines` is forced on so columns stay aligned and wide tables become horizontally-scrollable. Hit the same keybind again to widen — prior display settings are restored exactly. Code-block popups get `visual-line-mode` enabled inside so long lines wrap softly. Both built on upstream `markdown-edit-code-block` / `org-edit-src-code` for the popups; tables are an in-place `narrow-to-region`.
+
 ## Markdown preview
 
 `C-c C-c p` in any `.md` buffer opens a GitHub-styled HTML preview in the browser, rendered through [`cmark-gfm`](https://github.com/github/cmark-gfm) with GFM extensions (tables, strikethrough, autolinks, tasklists). The stylesheet is [`sindresorhus/github-markdown-css`](https://github.com/sindresorhus/github-markdown-css), vendored at `vendor/github-markdown.css` and resolved at runtime from `user-emacs-directory` — cloning the repo is the whole install. Refresh the vendored copy from upstream:

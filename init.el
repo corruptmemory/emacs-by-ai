@@ -1538,6 +1538,101 @@ With prefix argument REFRESH, rebuild completion cache first."
   (markdown-xhtml-body-preamble "<article class=\"markdown-body\">")
   (markdown-xhtml-body-epilogue "</article>"))
 
+;;;; Edit-thing-at-point — narrow markdown/org tables with truncation save;
+;;;; delegate code blocks to upstream popup editors.
+;;
+;; Tables: narrow-to-region in place, save+restore display state (so a wide
+;; table stays column-aligned with horizontal scroll, not soft-wrapped).
+;; Code blocks: delegate to `markdown-edit-code-block' (markdown) or
+;; `org-edit-special' (org) — both open an isolated buffer in the language
+;; mode.  In those popups we enable `visual-line-mode' for soft wrapping.
+;;
+;; Keybindings (intentional asymmetry — see CLAUDE.md):
+;;   markdown/gfm  C-c '   → dispatch: code-block → popup; table → narrow
+;;   markdown/gfm  C-c "   → narrow current table (force, even on code)
+;;   org           C-c '   → unchanged (`org-edit-special'; formula editor)
+;;   org           C-c "   → narrow current table
+
+(defvar-local cm/narrow-table--saved nil
+  "Plist of display settings to restore when our narrow widens.
+Non-nil iff we narrowed this buffer to a table.")
+
+(defun cm/narrow-table--restore ()
+  "Widen and restore display settings saved by `cm/narrow-table--narrow'."
+  (let ((s cm/narrow-table--saved))
+    (setq cm/narrow-table--saved nil)
+    (widen)
+    (visual-line-mode (if (plist-get s :visual-line-mode) 1 -1))
+    (setq truncate-lines (plist-get s :truncate-lines))
+    (force-mode-line-update)))
+
+(defun cm/narrow-table--narrow (beg end)
+  "Save current display state, narrow to BEG..END, force wide-table view.
+Wide-table view = visual-line-mode off + truncate-lines on, so columns
+stay aligned and long rows are seen via horizontal scroll."
+  (setq cm/narrow-table--saved
+        (list :visual-line-mode (bound-and-true-p visual-line-mode)
+              :truncate-lines truncate-lines))
+  (narrow-to-region beg end)
+  (visual-line-mode -1)
+  (setq truncate-lines t)
+  (force-mode-line-update))
+
+(defun cm/narrow-table-at-point ()
+  "Toggle table narrowing in markdown/gfm/org buffers.
+If already narrowed (by us), widen and restore display settings.
+Otherwise, narrow to the table at point with column-preserving display."
+  (interactive)
+  (cond
+   (cm/narrow-table--saved
+    (cm/narrow-table--restore))
+   ((and (derived-mode-p 'markdown-mode 'gfm-mode)
+         (markdown-table-at-point-p))
+    (cm/narrow-table--narrow (markdown-table-begin) (markdown-table-end)))
+   ((and (derived-mode-p 'org-mode)
+         (org-at-table-p))
+    (cm/narrow-table--narrow (org-table-begin) (org-table-end)))
+   (t
+    (user-error "Not in a table"))))
+
+(defun cm/markdown-edit-at-point-dwim ()
+  "Dispatch C-c ' in markdown/gfm.
+Already narrowed by us → widen and restore.  Code block → upstream
+`markdown-edit-code-block' (indirect buffer in language mode).  Table →
+narrow with truncation save.  Otherwise → error."
+  (interactive)
+  (cond
+   (cm/narrow-table--saved
+    (cm/narrow-table--restore))
+   ((markdown-code-block-at-point-p)
+    (markdown-edit-code-block))
+   ((markdown-table-at-point-p)
+    (cm/narrow-table--narrow (markdown-table-begin) (markdown-table-end)))
+   (t
+    (user-error "Not in a code block or table"))))
+
+(with-eval-after-load 'markdown-mode
+  (define-key markdown-mode-map (kbd "C-c '")  #'cm/markdown-edit-at-point-dwim)
+  (define-key markdown-mode-map (kbd "C-c \"") #'cm/narrow-table-at-point)
+  (define-key gfm-mode-map      (kbd "C-c '")  #'cm/markdown-edit-at-point-dwim)
+  (define-key gfm-mode-map      (kbd "C-c \"") #'cm/narrow-table-at-point))
+
+(with-eval-after-load 'org
+  (define-key org-mode-map (kbd "C-c \"") #'cm/narrow-table-at-point))
+
+;; Code-block popups: enable `visual-line-mode' so long lines wrap softly.
+;; markdown's popup goes through `edit-indirect' into a language mode (almost
+;; always a prog-mode descendant); org's popup uses `org-src-mode'.  Scope the
+;; edit-indirect hook to prog-mode buffers so non-code indirect edits aren't
+;; affected.
+(with-eval-after-load 'edit-indirect
+  (add-hook 'edit-indirect-after-creation-hook
+            (lambda ()
+              (when (derived-mode-p 'prog-mode)
+                (visual-line-mode 1)))))
+
+(add-hook 'org-src-mode-hook #'visual-line-mode)
+
 ;;;; JavaScript / TypeScript.
 ;; js-ts-mode, typescript-ts-mode, tsx-ts-mode are built-in.
 ;; typescript-language-server is eglot's default.

@@ -312,6 +312,28 @@ suite under `tests/`.
 - The per-project scratch handler is registered with **`easysession-define-generic-save-handler`**, not `easysession-define-save-handler`. The latter expects the user save function to return `((buffers . DATA) (remaining-buffers . REST))`; our `cm/scratch--save-handler` is a *pure* serializer returning a plain `((NAME . ((buffer-string . TEXT))) …)` alist (so it stays unit-testable without easysession). `cm/session--install-handlers` bridges the two — it builds the structured `(key value remaining-buffers)` result and lets the built-in file/dired handlers consume the `remaining-buffers`. Registering the plain serializer directly via `easysession-define-save-handler` silently stores `nil` (the scratch buffers vanish).
 - `cm/project-sessions-setup` sets **`easysession-confirm-new-session` to nil** so the first `C-x p p` into a project creates its session silently — easysession otherwise prompts "create new session?", which would defeat the zero-ceremony flip.
 
+## Edit-thing-at-point (narrow tables / popup code blocks)
+
+`C-c '` in markdown/gfm and `C-c "` in markdown/gfm/org invoke `cm/markdown-edit-at-point-dwim` and `cm/narrow-table-at-point`. The design is **deliberately asymmetric** between the two modes:
+
+| Mode         | `C-c '`                                                          | `C-c "`                       |
+|--------------|------------------------------------------------------------------|-------------------------------|
+| markdown/gfm | dispatch: code block → `markdown-edit-code-block` popup; table → narrow; else error | narrow current table (force)  |
+| org          | unchanged `org-edit-special` (src popup, formula editor, latex env, …) | narrow current table (force)  |
+
+Why the asymmetry: org's `C-c '` already dispatches to many element types (formula editor on tables, src popup on code, latex env, footnote, comment block, link follow, …). Overriding it to handle "narrow whole table" instead would silently kill the formula editor, which has no good alternative binding. Markdown's `C-c '` was just `markdown-edit-code-block`, with nothing else fighting for the key — so we extend it freely.
+
+**Table-narrow behavior** (`cm/narrow-table-at-point`):
+- Toggles on `cm/narrow-table--saved` (buffer-local). Non-nil → widen and restore; nil → narrow and save.
+- Narrow uses `narrow-to-region` in place (not an indirect buffer) — wide tables benefit from horizontal scroll in the same buffer; an indirect buffer adds a window without solving anything.
+- Display flip: `visual-line-mode -1` + `setq truncate-lines t`. This is **opposite** of what "disable truncation" sounds like — soft-wrapping a table mid-row destroys column alignment. The right move for wide tables is hard truncation with horizontal scroll, which keeps columns aligned. On widen, both settings are restored from the saved plist.
+
+**Code-block popups get `visual-line-mode`** enabled in two places:
+- `edit-indirect-after-creation-hook` (markdown path), scoped to `prog-mode` derivatives so non-code indirect edits aren't affected.
+- `org-src-mode-hook` (org path), unconditional — `org-src-mode` only runs in popups by definition.
+
+The dispatch checks `cm/narrow-table--saved` **first**, so once narrowed any subsequent `C-c '` is a widen (even though point is still "in a table" by predicate). Without this ordering, the dispatcher would re-narrow the already-narrowed region — a no-op at best, confusing at worst.
+
 ## Markdown preview
 
 `C-c C-c p` in a `.md` buffer renders via `cmark-gfm` (GFM extensions: tables, strikethrough, autolinks, tasklists) and opens the HTML in the browser. Output is wrapped in `<article class="markdown-body">…</article>` — that wrapper is the load-bearing contract that connects [sindresorhus/github-markdown-css](https://github.com/sindresorhus/github-markdown-css) (every rule scoped to `.markdown-body`) to the rendered HTML. Without it, the linked stylesheet matches nothing. The CSS is vendored at `vendor/github-markdown.css` and its `file://` URL is computed from `user-emacs-directory` inside the `markdown-mode` `:custom` block, so a fresh clone needs no install step. Refresh from upstream:

@@ -93,6 +93,34 @@ handling neutralised so Jai `#'-directives neither crash nor mis-indent."
         (cpp-font-lock-keywords-source-directives "\\_<\\_>"))
     (js-indent-line)))
 
+(defun jai-ts-mode--syntax-propertize-function (start end)
+  "Mark Jai `#string TAG … TAG' here-strings as strings between START and END.
+Adapted from jai-mode.  Applying string-fence syntax to heredoc bodies keeps
+their contents (including stray braces) out of `syntax-ppss' nesting, so they
+cannot corrupt indentation."
+  (goto-char start)
+  ;; If START is already inside a here-string, close that one first.
+  (when-let* ((ppss (syntax-ppss))
+              (inside (eq t (nth 3 ppss)))
+              (start-pos (nth 8 ppss))
+              (tag (get-text-property start-pos 'here-string-marker)))
+    (when (re-search-forward (concat "^[[:space:]]*" (regexp-quote tag) ";?$") end 'move)
+      (let ((end (match-end 0)))
+        (put-text-property (1- end) end 'syntax-table (string-to-syntax "|")))))
+  (while (re-search-forward "#string +\\([a-zA-Z_][a-zA-Z0-9_]+\\)" end 'move)
+    (unless (nth 4 (syntax-ppss))
+      (let ((tag (match-string 1))
+            (beg (match-beginning 1)))
+        (unless (string= tag "CODE")
+          (put-text-property beg (1+ beg) 'here-string-marker tag)
+          (put-text-property beg (1+ beg) 'syntax-table (string-to-syntax "|"))
+          (when (re-search-forward
+                 (concat "^[[:space:]]*" "\\(" (regexp-quote tag) "\\)"
+                         "\\([[:space:]]*[[:punct:]]*;?$\\)")
+                 end 'move)
+            (let ((end (match-end 1)))
+              (put-text-property (1- end) end 'syntax-table (string-to-syntax "|")))))))))
+
 ;;;###autoload
 (define-derived-mode jai-ts-mode prog-mode "Jai"
   "Major mode for editing Jai source.
@@ -114,6 +142,7 @@ eglot and the jails language server."
               js-indent-level            jai-ts-mode-indent-offset
               parse-sexp-ignore-comments t
               js-jsx-syntax              nil)
+  (setq-local syntax-propertize-function #'jai-ts-mode--syntax-propertize-function)
   ;; Basic regex font-lock — good enough given tree-sitter can't help here.
   (setq-local font-lock-defaults
               '((jai-ts-mode--font-lock-keywords) nil nil nil nil))

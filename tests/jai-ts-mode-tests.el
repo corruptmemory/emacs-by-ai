@@ -46,5 +46,19 @@
     (search-forward "y")
     (should-not (nth 4 (syntax-ppss)))))  ; outside after both closers
 
+(ert-deftest jai-ts-mode-test-here-string-braces-ignored ()
+  "Braces inside a #string heredoc don't count toward nesting depth."
+  (with-temp-buffer
+    (jai-ts-mode)
+    (insert "s := #string DONE\n{ not a real brace }\nDONE\nafter := 1;\n")
+    (syntax-ppss (point-max))             ; force propertization
+    (goto-char (point-min))
+    (search-forward "{ not")
+    (should (nth 3 (syntax-ppss)))        ; the brace is inside a string
+    (goto-char (point-min))
+    (search-forward "after :=")
+    (beginning-of-line)
+    (should (= 0 (car (syntax-ppss))))))  ; heredoc brace ignored → depth 0
+
 (provide 'jai-ts-mode-tests)
 ;;; jai-ts-mode-tests.el ends here

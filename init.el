@@ -1536,6 +1536,14 @@ With prefix argument REFRESH, rebuild completion cache first."
 
 ;;;; CMake.
 ;; cmake-ts-mode is built-in; cmake-language-server is eglot's default.
+;; The grammar and the `.cmake' extension mapping come from treesit-auto, but
+;; nothing maps the `CMakeLists.txt' *basename* — and the generic
+;; `\.te?xt\' -> text-mode' rule otherwise claims it, leaving the main CMake
+;; file un-highlighted.  Restore the canonical basename+extension mapping
+;; explicitly (added after the treesit-auto block, so it prepends and wins).
+(use-package cmake-ts-mode
+  :straight nil
+  :mode "\\(?:CMakeLists\\.txt\\|\\.cmake\\)\\'")
 
 ;;;; edit-indirect — generic "edit region in indirect buffer" machinery.
 ;; markdown-mode treats this as a soft dependency: `markdown-edit-code-block'

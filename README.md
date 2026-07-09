@@ -240,6 +240,7 @@ Run `M-x all-the-icons-install-fonts` once after first install for icon support.
 | `gopls`                           | Go LSP                                            |
 | `rust-analyzer`                   | Rust LSP                                          |
 | `clangd`                          | C/C++ LSP                                         |
+| `cmake-language-server`           | CMake LSP (optional; highlighting is tree-sitter) |
 | `pyright`                         | Python LSP                                        |
 | `typescript-language-server`      | JS/TS LSP                                         |
 | `dlv` (Delve)                     | Go debugging via Dape                             |

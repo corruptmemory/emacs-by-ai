@@ -94,6 +94,24 @@ emacs --batch --init-directory=~/.config/emacs -l init.el --eval '
 
 **Known incompatibility:** Emacs 30.2's `treesit.c` is incompatible with tree-sitter 0.26+ (predicate naming conflict — Emacs uses `#match`, tree-sitter 0.26 requires `#match?`, and both validate in C). As of 2026-04-09, this system runs `tree-sitter 0.25.10` + `emacs-wayland 30.2-1` with both pinned in `/etc/pacman.conf` `IgnorePkg`. If tree-sitter modes break after a system update, check `pacman -Qi tree-sitter` — if it's 0.26+, downgrade both packages and rebuild grammars. See `docs/tree-sitter-026-fix.md` for the full diagnosis and step-by-step fix.
 
+## CMake
+
+`cmake-ts-mode` is built-in (Emacs 29+); `treesit-auto` installs the `cmake`
+grammar and `cmake-language-server` is eglot's default (hooked at the
+`cmake-ts-mode` entry in the eglot block). No extra package is needed —
+highlighting is tree-sitter, so it works even when the LSP is absent.
+
+**The one thing that isn't automatic** (a `use-package cmake-ts-mode :straight
+nil :mode …` block restores it): the `CMakeLists.txt` *basename* mapping.
+`treesit-auto` registers only the `.cmake` *extension*, and Emacs' generic
+`"\\.te?xt\\'" -> text-mode` rule then claims `CMakeLists.txt` — so the main
+CMake file silently opened in `text-mode` (no highlighting) while `foo.cmake`
+worked. `auto-mode-alist` is **first-match-wins**, so the fix is an explicit
+`("\\(?:CMakeLists\\.txt\\|\\.cmake\\)\\'" . cmake-ts-mode)` entry added *after*
+the treesit-auto block (later `add-to-list` prepends → wins over `.txt`). The
+lesson generalizes: any basename-only filetype (no distinguishing extension)
+needs an explicit entry; extension-driven auto-registration will miss it.
+
 ## Jai and Tree-Sitter
 
 `jai-ts-mode.el` deliberately does **not** use tree-sitter. Jai's bracketed/unbracketed control flow variants (every control form has both `if x { }` and `if x stmt;` styles) cause the LR automaton state count to exceed tree-sitter's hard-coded 64K limit. Multiple serious attempts to build a complete grammar failed for this reason. The best available grammar (`overlord-systems/jai-tree-sitter`) only parses variable declarations and produces ERROR nodes for nearly all real code. Indentation, font-lock, and navigation are therefore hand-rolled (see next section).

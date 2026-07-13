@@ -1763,7 +1763,37 @@ narrow with truncation save.  Otherwise → error."
   :hook
   ((org-mode . visual-line-mode)
    (org-mode . org-indent-mode)
-   (org-mode . cm/org-apply-heading-scale)))
+   (org-mode . cm/org-apply-heading-scale))
+  :config
+  ;; Native src-block fontification picks a major mode by appending "-mode" to
+  ;; the block language: "go" -> `go-mode'.  For any language whose only major
+  ;; mode is a tree-sitter (`X-ts-mode') or a custom mode, that guess misses and
+  ;; Org *silently* leaves the block un-highlighted.  Map each such language to
+  ;; the mode we actually use (alist values omit the "-mode" suffix).  Only the
+  ;; languages that need help are listed — Org's own defaults already cover the
+  ;; rest (cpp -> c++, bash -> sh, toml -> conf-toml, …), and c/python/js/html/
+  ;; css/odin/zig/glsl/slang/fish/haskell resolve to a working base mode.
+  ;;
+  ;; Every entry was checked to fontify without error; a target whose grammar
+  ;; isn't installed yet degrades to no-highlight (never an error) until
+  ;; treesit-auto fetches it.  `jai-ts-mode' is regex-based, so it needs no
+  ;; grammar at all.  `ts'/`yml' are convenience aliases.
+  (with-eval-after-load 'org-src
+    (dolist (pair '(("jai"        . jai-ts)
+                    ("go"         . go-ts)
+                    ("rust"       . rust-ts)
+                    ("scala"      . scala-ts)
+                    ("lua"        . lua-ts)
+                    ("typescript" . typescript-ts)
+                    ("ts"         . typescript-ts)
+                    ("tsx"        . tsx-ts)
+                    ("json"       . json-ts)
+                    ("yaml"       . yaml-ts)
+                    ("yml"        . yaml-ts)
+                    ("dockerfile" . dockerfile-ts)
+                    ("cmake"      . cmake-ts)
+                    ("templ"      . templ-ts)))
+      (add-to-list 'org-src-lang-modes pair))))
 
 ;;;; Heading sizing — shared machinery for org and markdown.
 ;; Captures each face group's baseline height once, then scales from that

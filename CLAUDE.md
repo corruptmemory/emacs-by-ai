@@ -112,6 +112,46 @@ the treesit-auto block (later `add-to-list` prepends → wins over `.txt`). The
 lesson generalizes: any basename-only filetype (no distinguishing extension)
 needs an explicit entry; extension-driven auto-registration will miss it.
 
+## Org source-block highlighting
+
+Org fontifies `#+begin_src LANG` blocks natively (`org-src-fontify-natively`,
+default `t`) by turning `LANG` into a major mode: it looks `LANG` up in
+`org-src-lang-modes` and, on a miss, falls back to appending `-mode` →
+`LANG-mode`. If that mode isn't `fboundp`, Org **silently** leaves the block
+un-highlighted (no error, no message). So `#+begin_src go` looked for a
+non-existent `go-mode` (Go ships only as tree-sitter `go-ts-mode`) and rendered
+plain — same failure for `jai`, `rust`, `typescript`, `yaml`, `cmake`, etc.,
+whose only major mode is an `X-ts-mode` or a custom mode.
+
+The fix is a `:config` block on the `org` `use-package` form that seeds
+`org-src-lang-modes` with the languages that need help (**alist values omit the
+`-mode` suffix**, e.g. `("go" . go-ts)` → `go-ts-mode`). Only broken languages
+are listed; Org's own defaults already cover `cpp`→c++, `bash`→sh,
+`toml`→conf-toml, and `c`/`python`/`js`/`html`/`css`/`odin`/`zig`/`glsl`/
+`slang`/`fish`/`haskell` resolve to a working base mode. Aliases `ts`/`yml` map
+alongside `typescript`/`yaml`.
+
+The mapping is wrapped in `(with-eval-after-load 'org-src …)` because
+`org-src-lang-modes` is defined in `org-src.el`, which loads lazily (the first
+naive `add-to-list` failed with *"Symbol's value as variable is void:
+org-src-lang-modes"* when run too early). Notes:
+
+- **Adding a mapping never errors, even if the target grammar is missing** — a
+  tree-sitter mode with no grammar degrades to no-highlight (verified: `lua`
+  maps fine but stays plain until `treesit-auto` fetches the grammar on first
+  `.lua` visit). So the list can safely name languages whose grammar isn't
+  installed yet.
+- **`jai-ts-mode` is regex-based, not tree-sitter** (its name notwithstanding),
+  so `("jai" . jai-ts)` needs no grammar at all.
+- Verify a language: `(org-src-get-lang-mode "LANG")` should return an
+  `fboundp` mode; end-to-end, a keyword in the block picks up a
+  `font-lock-*-face` layered over `org-block`.
+
+Same shape as the CMake gotcha above: the default name-based resolution misses,
+so add an explicit entry. Rule of thumb — **any language whose only major mode
+is `X-ts-mode` (or a differently-named custom mode) needs an `org-src-lang-modes`
+entry** to highlight in an Org src block.
+
 ## Jai and Tree-Sitter
 
 `jai-ts-mode.el` deliberately does **not** use tree-sitter. Jai's bracketed/unbracketed control flow variants (every control form has both `if x { }` and `if x stmt;` styles) cause the LR automaton state count to exceed tree-sitter's hard-coded 64K limit. Multiple serious attempts to build a complete grammar failed for this reason. The best available grammar (`overlord-systems/jai-tree-sitter`) only parses variable declarations and produces ERROR nodes for nearly all real code. Indentation, font-lock, and navigation are therefore hand-rolled (see next section).

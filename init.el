@@ -1765,6 +1765,12 @@ narrow with truncation save.  Otherwise → error."
    (org-mode . org-indent-mode)
    (org-mode . cm/org-apply-heading-scale))
   :config
+  ;; Restore the pre-Org-9.2 `<s TAB' easy-templates (`<s' src, `<e' example,
+  ;; `<q' quote, …).  Org 9.2 moved them into `org-tempo', which is off by
+  ;; default; loading it registers `org-tempo-setup' on `org-mode-hook' so every
+  ;; Org buffer gets the `<KEY' + TAB expansions.  (The built-in
+  ;; `C-c C-,' / `org-insert-structure-template' keeps working either way.)
+  (require 'org-tempo)
   ;; Native src-block fontification picks a major mode by appending "-mode" to
   ;; the block language: "go" -> `go-mode'.  For any language whose only major
   ;; mode is a tree-sitter (`X-ts-mode') or a custom mode, that guess misses and

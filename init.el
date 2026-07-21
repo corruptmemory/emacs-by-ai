@@ -204,7 +204,7 @@
              (expand-file-name "themes/" user-emacs-directory))
 
 ;;;; Theme.
-(load-theme 'dracula-pro-blade t)
+(load-theme 'modus-vivendi-tinted t)
 
 ;;;; Theme-derived fringe contrast.
 (require 'color)

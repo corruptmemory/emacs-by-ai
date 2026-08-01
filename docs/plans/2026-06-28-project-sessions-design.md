@@ -81,8 +81,8 @@ Key spike findings baked into this design:
 1. **Scratch = two tiers.** Per-project scratch buffers ride each project's
    session; a small set of **global stash** buffers (for reusable snippets/test
    data) is always present, independent of project.
-2. **Scratch creation UX.** `C-c n` instantly opens a fresh project-tier scratch
-   buffer (`*scratch:<proj>:N*`, auto-named, no prompt). `C-u C-c n` prompts for a
+2. **Scratch creation UX.** `C-c N` instantly opens a fresh project-tier scratch
+   buffer (`*scratch:<proj>:N*`, auto-named, no prompt). `C-u C-c N` prompts for a
    name and creates/visits a global stash buffer (`*stash:<name>*`).
 3. **Unsaved files on switch.** Before teardown, run the standard
    `save-some-buffers` prompt for modified *file* buffers (appears only when such
@@ -97,7 +97,7 @@ Key spike findings baked into this design:
    and every `cm/session-save-interval` seconds (default 60); the switch flow saves
    explicitly. Bounds crash/kill loss to ~60s.
 6. **Defaults.** Scratch default major mode `cm/scratch-default-mode` = `text-mode`
-   (user-tweakable per buffer). Keybinding `C-c n` (verified free in `init.el`).
+   (user-tweakable per buffer). Keybinding `C-c N` (verified free in `init.el`).
 
 ## Architecture
 
@@ -121,7 +121,7 @@ behavior changes. Three layers:
   when `dir` is the already-current project.
 - **`cm/session--project-switch-advice`** — `:around` advice on
   `project-switch-project` routing `C-x p p` through the flip.
-- **`cm/scratch-new (&optional global)`** → `C-c n`. No prefix: instant
+- **`cm/scratch-new (&optional global)`** → `C-c N`. No prefix: instant
   project-tier scratch `*scratch:<proj>:N*` in `cm/scratch-default-mode`, no prompt.
   `C-u`: prompt for a stash name → `*stash:<name>*` in the global tier.
 - **Project-scratch handler** — an `easysession-define-handler` (key
@@ -158,7 +158,7 @@ them from `cm/stash-file` regardless.
 | | Project tier | Global stash |
 |---|---|---|
 | Name | `*scratch:<proj>:N*` | `*stash:<name>*` (+ the lone `*scratch*`) |
-| Created by | `C-c n` (instant, no prompt) | `C-u C-c n` (named) |
+| Created by | `C-c N` (instant, no prompt) | `C-u C-c N` (named) |
 | Persisted in | the project's easysession blob | its own `cm/stash-file` |
 | On project flip | swaps out with the project | **always present** |
 | Default major mode | `cm/scratch-default-mode` (`text-mode`) | same |
@@ -225,7 +225,7 @@ ERT suite `tests/cm-project-sessions-tests.el` (repo convention; run via
 ## Affected files
 
 - **New:** `cm-project-sessions.el`, `tests/cm-project-sessions-tests.el`.
-- **Edit:** `init.el` — `use-package easysession`; load the sibling; bind `C-c n`;
+- **Edit:** `init.el` — `use-package easysession`; load the sibling; bind `C-c N`;
   apply the configuration above. `.gitignore` — the sessions directory + stash file.
 - **Docs:** `CLAUDE.md` (architecture-list item + a section), `README.md` (a
   "Project sessions" section).

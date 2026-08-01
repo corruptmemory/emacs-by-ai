@@ -345,8 +345,8 @@ keyed by project root.
   Note: the advice replaces the default `project-switch-project` dispatch menu
   entirely — `C-x p p` does the session flip directly; the individual
   `project-*` commands (e.g. `project-find-file`) are untouched.
-- **Two scratch tiers.** `C-c n` instantly makes a per-project scratch buffer
-  `*scratch:<proj>:N*` (rides that project's session). `C-u C-c n` prompts for a
+- **Two scratch tiers.** `C-c N` instantly makes a per-project scratch buffer
+  `*scratch:<proj>:N*` (rides that project's session). `C-u C-c N` prompts for a
   name and makes a global stash buffer `*stash:<name>*` (always present, persisted
   in `cm/stash-file`, independent of any session). The lone `*scratch*` is part of
   the global tier. Default major mode: `cm/scratch-default-mode` (`text-mode`).

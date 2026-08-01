@@ -128,8 +128,8 @@ Scratch buffers come in two tiers:
 
 | Key | Action |
 |-----|--------|
-| `C-c n` | New per-project scratch buffer (`*scratch:<proj>:N*`), instant |
-| `C-u C-c n` | New/visit a global stash buffer (`*stash:<name>*`), always present |
+| `C-c N` | New per-project scratch buffer (`*scratch:<proj>:N*`), instant |
+| `C-u C-c N` | New/visit a global stash buffer (`*stash:<name>*`), always present |
 
 Implemented in `cm-project-sessions.el`; ERT tests under `tests/`. Design + plan
 in `docs/plans/2026-06-28-project-sessions-{design,plan}.md`.

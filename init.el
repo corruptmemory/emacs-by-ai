@@ -1085,8 +1085,10 @@ Valid entries must have a regexp string as their car."
 ;; Sessions-as-projects on easysession: C-x p p saves the current project's
 ;; session, tears down, and restores (or creates) the target's — files, window
 ;; layout, per-file point, and unsaved scratch buffers.  Two scratch tiers:
-;; per-project (*scratch:PROJ:N*, instant via C-c n) ride each session; a global
-;; stash (*stash:NAME* via C-u C-c n, and the lone *scratch*) is always present.
+;; per-project (*scratch:PROJ:N*, instant via C-c N) ride each session; a global
+;; stash (*stash:NAME* via C-u C-c N, and the lone *scratch*) is always present.
+;; Capital N deliberately: lowercase C-c n collides with which-key's
+;; minibuffer paging, which makes command paging unusable.
 ;; See docs/plans/2026-06-28-project-sessions-design.md.
 (use-package easysession
   :init
@@ -1094,7 +1096,7 @@ Valid entries must have a regexp string as their car."
   :config
   (when (load (locate-user-emacs-file "cm-project-sessions") t)
     (cm/project-sessions-setup)
-    (global-set-key (kbd "C-c n") #'cm/scratch-new)))
+    (global-set-key (kbd "C-c N") #'cm/scratch-new)))
 
 ;;;; eldoc-box — floating documentation at point.
 (use-package eldoc-box

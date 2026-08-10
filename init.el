@@ -114,6 +114,40 @@
 (setq save-interprogram-paste-before-kill t)
 ;; Don't store duplicate kills.
 (setq kill-do-not-save-duplicates t)
+;; X selection reads — including the pre-kill preservation above — block until the
+;; current CLIPBOARD owner replies. A wedged owner (e.g. a hung Brave) otherwise
+;; stalls every M-w for the 5s default and the copy never reaches CLIPBOARD
+;; (PRIMARY/middle-click still works). Cap the wait at 1s. The real fix is copyq
+;; (a clipboard-manager daemon that owns CLIPBOARD responsively, so reads never
+;; hang); this is the belt-and-suspenders for the brief windows before it re-seizes.
+(setq x-selection-timeout 1000)
+;; Second failure mode of the same pre-kill read: when the clipboard holds a
+;; NON-text item — e.g. a flameshot screenshot served by copyq — the owner
+;; refuses every text target and Emacs prints "Selection owner couldn't convert:
+;; UTF8_STRING/STRING/COMPOUND_TEXT/text-plain" once per target on every M-w. The
+;; kill still completes (text lands on the clipboard); the messages are pure
+;; noise. Fix: look before reading — only interrogate the clipboard as text when
+;; it actually advertises a text TARGET, otherwise fall through quietly. Scoped
+;; to `interprogram-paste-function' so explicit paste (clipboard-yank) is
+;; untouched, and the text-clipboard path behaves exactly as `gui-selection-value'
+;; did before.
+(defun cm/interprogram-paste-text-only ()
+  "CLIPBOARD reader for kill-ring preservation that runs only for text.
+Peek at the clipboard's TARGETS and call `gui-selection-value' only when a
+text target is offered; otherwise return nil without interrogating an
+image-only clipboard (which would emit \"couldn't convert\" chatter)."
+  (let ((inhibit-message t)
+        (message-log-max nil))
+    (when-let* ((targets (ignore-errors (gui-get-selection 'CLIPBOARD 'TARGETS)))
+                (has-text (seq-some
+                           (lambda (tp)
+                             (let ((n (symbol-name tp)))
+                               (or (string-search "STRING" n)
+                                   (string-search "TEXT" n)
+                                   (string-prefix-p "text/" n))))
+                           (append targets nil))))
+      (ignore-errors (gui-selection-value)))))
+(setq interprogram-paste-function #'cm/interprogram-paste-text-only)
 
 ;;;; Editing niceties.
 ;; Auto-chmod files with shebang lines on save.

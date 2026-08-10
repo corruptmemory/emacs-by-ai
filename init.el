@@ -1546,7 +1546,15 @@ With prefix argument REFRESH, rebuild completion cache first."
 
 ;;;; Odin.
 (use-package odin-mode
-  :straight (:host sourcehut :repo "mgmarlow/odin-mode")
+  ;; The community mainline (MELPA), maintained. We were previously on
+  ;; mgmarlow's sourcehut re-implementation, whose upstream was deleted
+  ;; (git.sr.ht/~mgmarlow/odin-mode → 404) leaving us frozen at a 2023
+  ;; commit. mattt-b's is the actively-maintained trunk (current keyword
+  ;; list, e.g. not_in) and provides the same `odin-mode' symbol, so the
+  ;; eglot/org-src wiring below is unaffected. (Note: unlike mgmarlow's,
+  ;; it does not ship odin-build/run/check/test-project commands — those
+  ;; were unbound and unused here.)
+  :straight (:host github :repo "mattt-b/odin-mode")
   :mode "\\.odin\\'")
 
 ;;;; Zig.

@@ -82,6 +82,36 @@ Jai (`jails`) is **intentionally left unwired**, even though the `jails` binary 
 
 Slang (`slangd`, shader-slang.org) uses [`K1ngst0m/slang-mode`](https://github.com/K1ngst0m/slang-mode) — a purpose-built major mode (regex font-lock + indent + imenu) plus its `slang-lsp.el`, which auto-registers `slangd` with eglot **only when it is found on `PATH`** (install via AUR `shader-slang-bin`, symlinked into `~/.local/bin`). Two gotchas are baked into the `init.el` block: (1) `slang-lsp-initialize` mutates eglot *globally* — it adds `flymake` to `eglot-stay-out-of` (which would suppress eglot's flymake diagnostics in **every** language), so the config `delq`s it back out; (2) hover needs a recent eglot — `emacs-straight/eglot` 1.23 at commit `3371f2b` shipped a `gfm-extract` markup-render bug (`invalid-function #'gfm-extract`), fixed by `straight-pull-package eglot` (≥ `3c64b09`). The mode's floor works with no LSP; `C-c w r` multi-root grep covers references (which `slangd` can't do yet).
 
+## Odin editing (`odin-mode`)
+
+Odin uses [`mattt-b/odin-mode`](https://github.com/mattt-b/odin-mode) (the
+community mainline, also on MELPA). Because Odin's intelligence comes from `ols`
+via eglot (`(odin-mode . ("ols"))` in the eglot block), the major mode itself is
+a **presentation layer only**: `regexp-opt` font-lock + `js-indent-line`
+indentation (the same C-style engine `jai-ts-mode` leans on) + the `.odin`
+auto-mode entry. It `(provide 'odin-mode)`s the same symbol the whole config
+wires against (eglot, and the `odin`→`odin-mode` org-src mapping), so the source
+is swappable without touching any other block.
+
+**Provenance / why we're on this fork.** We were previously on
+`sourcehut:~mgmarlow/odin-mode`, a cleaner re-implementation whose upstream was
+later **deleted** (`git.sr.ht/~mgmarlow/odin-mode` → 404), leaving the local
+clone frozen at a 2023 commit with a stale keyword table (no `not_in`). mattt-b's
+is the actively-maintained trunk mgmarlow had forked from — and one Jim
+contributed to in 2021 (PRs #4/#5). The one thing lost in the move: mgmarlow's
+`odin-build/run/check/test-project` compile commands (they were unbound and
+unreferenced here, so nothing broke).
+
+**The straight.el gotcha this exposed (generic — bites any package-source
+change).** straight keys a repo by **package name**, not by `:repo`, so editing
+the recipe's `:host`/`:repo` alone does **not** re-clone — straight reuses the
+existing `straight/repos/<pkg>` clone with its *old* remote and you'd swear the
+edit "didn't take." Forcing the switch is a filesystem step, not a config step:
+`rm -rf straight/repos/<pkg> straight/build/<pkg>`, then the next launch (or a
+`straight-use-package` call) clones fresh from the new recipe. `straight/` is
+gitignored, so that churn never shows in git — the durable change lives entirely
+in the `init.el` recipe.
+
 ## Tree-Sitter and Arch Linux
 
 Tree-sitter grammars live in `tree-sitter/` (not checked into git — rebuilt per machine). To rebuild all grammars:

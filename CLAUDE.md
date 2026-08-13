@@ -124,6 +124,19 @@ emacs --batch --init-directory=~/.config/emacs -l init.el --eval '
 
 **Known incompatibility:** Emacs 30.2's `treesit.c` is incompatible with tree-sitter 0.26+ (predicate naming conflict — Emacs uses `#match`, tree-sitter 0.26 requires `#match?`, and both validate in C). As of 2026-04-09, this system runs `tree-sitter 0.25.10` + `emacs-wayland 30.2-1` with both pinned in `/etc/pacman.conf` `IgnorePkg`. If tree-sitter modes break after a system update, check `pacman -Qi tree-sitter` — if it's 0.26+, downgrade both packages and rebuild grammars. See `docs/tree-sitter-026-fix.md` for the full diagnosis and step-by-step fix.
 
+## Emacs 31 migration (planned)
+
+Emacs 31 is in pretest (as of 2026-08-13: branches `emacs-31`, pretests
+`31.0.90`/`31.0.91`, master already at `32.0.50`; no `31.1` date, autumn 2026
+plausible). `docs/emacs-31-migration.md` is the living ledger tracking its
+impact on **this** config — release status, a condensed feature overview, what
+we can drop/simplify (chiefly retiring `treesit-auto` in favor of built-in
+`treesit-enabled-modes` + `treesit-auto-install-grammar`, gated on grammar-source
+coverage and the tree-sitter 0.25.10 pin above), the behavior watch-list, and a
+pre-flight checklist. The one concrete edit already known: `go-ts-mode-indent-offset`
+(`init.el`) is renamed to `go-ts-indent-offset` in 31. Update the ledger's status
+boxes as items are resolved.
+
 ## CMake
 
 `cmake-ts-mode` is built-in (Emacs 29+); `treesit-auto` installs the `cmake`

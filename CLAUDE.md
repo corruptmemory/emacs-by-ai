@@ -110,7 +110,23 @@ edit "didn't take." Forcing the switch is a filesystem step, not a config step:
 `rm -rf straight/repos/<pkg> straight/build/<pkg>`, then the next launch (or a
 `straight-use-package` call) clones fresh from the new recipe. `straight/` is
 gitignored, so that churn never shows in git — the durable change lives entirely
-in the `init.el` recipe.
+in the `init.el` recipe, and **that filesystem step is per-machine** — landing
+the recipe commit does not retroactively fix a clone that already exists on any
+given machine.
+
+**This bit us for real on `nomad-artix` (2026-08-14), 4 days after the recipe
+commit landed.** The recipe was already correct, but `straight/repos/odin-mode`
+was still the original mgmarlow clone — its `origin` remote had been repointed
+to `mattt-b/odin-mode` at some point, but the directory was never `rm -rf`'d, so
+local `HEAD` sat on 11 commits absent from `origin/master` (mgmarlow's own fork
+history) while missing 8 real upstream commits, including the exact `notin` →
+`not_in` fix that motivated the switch. **Detecting this**: a stale
+remote-repointed-but-not-recloned repo has a `.git` birth time (`stat .git`)
+that *predates* the recipe-switch commit, and `git fetch && git log
+HEAD..origin/master --oneline` / `git log origin/master..HEAD --oneline` both
+come back non-empty (should both be empty after a real reclone). Fixed by
+applying the `rm -rf` step above; verified via those same two log commands
+returning empty and `not_in` present in the checked-out file.
 
 ## Tree-Sitter and Arch Linux
 

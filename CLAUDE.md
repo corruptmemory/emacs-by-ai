@@ -38,7 +38,7 @@ The file is organized in this order:
 12. **Popup/buffer management** — Popper with project-based grouping, helpful; `ghostel` (libghostty-vt-backed terminal, replaces vterm) declared separately
 13. **Dev tooling** — treesit-auto, yasnippet, eglot (20+ language hooks, autoreconnect, harper-ls for writing modes), eglot-booster, consult-eglot, eldoc-box, flymake, dape (DAP)
 14. **Language configs** — Go (format-on-save, gotest, dape/Delve wrappers with auto-breakpoint), SQL (xref helpers, completion), docker, pdf-tools, compile-mode tweaks (ANSI color + Jai `line,column` error navigation — see below), then all other languages
-15. **AI writing assistant** — `cm/ai-*` exchange protocol for Claude Code integration (`C-c a` prefix), shared via `~/.emacs-ai/`, interactive `*ai-suggestions*` review buffer (`C-c a S`)
+15. **AI writing assistant** — `cm/ai-*` exchange protocol for Claude Code integration (`C-c a` prefix), shared via `~/.emacs-ai/`, interactive `*ai-suggestions*` review buffer (`C-c a S`); immediately followed by **gptel** — general multi-backend LLM chat client (`C-c g` prefix), unrelated job (plain chat/rewrite, no agentic capability) — see below
 16. **Multi-root project search** — `cm-project-roots.el` (loaded after the consult-eglot block): opt-in `C-c w` commands spanning dirs listed in a `.project-roots` file; LSP-first jump/refs, rg-based search/find-file; see below
 17. **Project TAGS auto-loading** — `cm-project-tags.el` (loaded after the multi-root block): on `find-file`, if the project root holds a `TAGS` file, load it buffer-locally and install the `cm/tags-cascade` xref backend (etags → dumb-jump fallback; yields to Eglot). See below.
 18. **Per-project session persistence** — `cm-project-sessions.el` (loaded after
@@ -322,6 +322,75 @@ For presenting multiple rewrite options, Claude Code writes `~/.emacs-ai/suggest
   }
 }
 ```
+
+## gptel (general LLM chat client)
+
+`gptel` is a plain multi-backend chat client — distinct from the AI Writing
+Assistant above, which is a file-exchange bridge specifically to the Claude
+Code CLI (agentic, project-aware). gptel has no agentic/file-editing
+capability and no job overlap with it: it's for quick in-buffer Q&A/rewrites
+and an Org-mode research notebook. Tool-use/MCP integration was deliberately
+left out of the initial setup — this is chat + rewrite + context-add only.
+
+**Backends registered** (`init.el`, right after the AI Writing Assistant
+block): Anthropic/Claude (`claude-sonnet-5`, the default backend/model at
+startup), OpenAI (`ChatGPT`), OpenRouter, Perplexity. None get an explicit
+`:models` override except OpenRouter — gptel maintains its own per-backend
+model catalogs upstream (including capability metadata like context length
+and tool support), so a hand-typed list would both go stale and drop that
+metadata. OpenRouter has no such catalog (it proxies hundreds of
+third-party models), so its `:models` list is a small curated starter set
+pulled from OpenRouter's live model API at setup time, not the full catalog
+— extend it as wanted from `https://openrouter.ai/api/v1/models`.
+
+**API keys** come from `~/.authinfo` (plain text, `chmod 600` — outside this
+repo, never committed) via `auth-source`, one `machine <host> login apikey
+password <key>` line per backend in use:
+```
+machine api.anthropic.com  login apikey password <key>
+machine api.openai.com     login apikey password <key>
+machine openrouter.ai      login apikey password <key>
+machine api.perplexity.ai  login apikey password <key>
+```
+A backend with no matching entry just fails to authenticate when selected —
+the others are unaffected.
+
+**The `:key` gotcha (bit us for real, 2026-08-21).** `gptel-make-anthropic`/
+`gptel-make-openai`/`gptel-make-perplexity` all declare `key` as a bare
+`&key` argument with **no default value** — verified directly in the
+installed source (`gptel-anthropic.el`, `gptel-openai.el`,
+`gptel-openai-extras.el`). The manual's phrasing ("defaults to
+`gptel-api-key-from-auth-source`") describes gptel's own internal
+`gptel-api-key` defcustom, which is **never** automatically wired into a
+backend you construct with `gptel-make-*` — omit `:key` and the backend's
+key slot is plain `nil`, so no `x-api-key`/`Authorization` header is sent at
+all, silently, on every request. First symptom looked like a stale
+`auth-source` cache (`HTTP 401 authentication_error` right after editing
+`~/.authinfo`); a **full Emacs restart did not fix it**, and the real error
+only became legible on retry: `x-api-key header is required`. **Fix:** every
+`gptel-make-*` call must pass `:key #'gptel-api-key-from-auth-source`
+explicitly — that function itself is fine and does the auth-source lookup
+correctly (keyed on the *currently active* backend's `:host` via the global
+`gptel-backend` var, which is why one function reference works for all four
+backends interchangeably). Verified by resolving the key locally
+(`gptel--get-api-key`) with no network call, then confirmed end-to-end.
+
+**Keybindings** (`C-c g` prefix, `cm/gptel-map` — `C-c a` was already taken
+by the AI Writing Assistant protocol above):
+- `C-c g g` — open/switch to gptel chat buffer (`gptel`)
+- `C-c g s` — `gptel-send`
+- `C-c g r` — `gptel-rewrite` (region refactor/rewrite with diff preview)
+- `C-c g a` — `gptel-add` (add region/buffer/file to context)
+- `C-c g m` — `gptel-menu` (transient: switch backend/model, params, presets)
+
+**gptel-magit** (separate package, `:hook (magit-mode . gptel-magit-install)`
+so it loads lazily): `M-g` in a `git-commit` buffer drafts a commit message
+from the staged diff; on a magit diff section, `d` then `x` explains it. Its
+own binding convention, not part of `cm/gptel-map`.
+
+**Not wired up (deliberately deferred):** MCP/tool-calling (`mcp.el`),
+auto-enabling `gptel-mode` in any buffer — everything above is on-demand via
+the keybindings only.
 
 ## Multi-root project search ("Add Folder to Project")
 

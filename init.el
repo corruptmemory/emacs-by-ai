@@ -2449,6 +2449,76 @@ Call this interactively with \\[cm/ai-show-suggestions] or remotely via:
         (insert text))
       (diff orig-file sugg-file nil t))))
 
+;;;; gptel — general-purpose in-buffer LLM chat client.
+;; Distinct from the cm/ai-* protocol above: that's a file-exchange bridge
+;; specifically to the Claude Code CLI (agentic, project-aware). gptel is a
+;; plain multi-backend chat client for quick in-buffer Q&A/rewrites and an
+;; Org-mode research notebook — no agentic/file-editing capability, no
+;; overlap in job. Tool-use/MCP integration deliberately deferred; this is
+;; chat + rewrite + context-add only.
+;;
+;; API keys read via auth-source from ~/.authinfo (plain text, chmod 600) —
+;; never hardcoded here. Required entries, one per backend in use:
+;;   machine api.anthropic.com  login apikey password <key>
+;;   machine api.openai.com     login apikey password <key>
+;;   machine openrouter.ai      login apikey password <key>
+;;   machine api.perplexity.ai  login apikey password <key>
+;; A backend with no matching entry simply fails to authenticate when
+;; selected — the others are unaffected.
+(use-package gptel
+  :config
+  ;; Anthropic is the default backend/model at startup. Not registering an
+  ;; explicit `:models' list for Anthropic/OpenAI below — gptel maintains
+  ;; its own per-backend model catalogs upstream (incl. capability metadata
+  ;; like context length/tool support); overriding with a hand-typed list
+  ;; would both go stale and drop that metadata. (Checked empirically: no
+  ;; backend, including OpenAI, is pre-registered by gptel at load time —
+  ;; every backend in use needs its own `gptel-make-*' call here.)
+  ;;
+  ;; `:key' is NOT optional despite `gptel-api-key' defaulting to
+  ;; `gptel-api-key-from-auth-source' — that defcustom is gptel's own
+  ;; internal fallback, never auto-wired into backends `gptel-make-*'
+  ;; constructs. Their `:key' keyword argument defaults to plain nil
+  ;; (verified in gptel-anthropic.el/gptel-openai.el/gptel-openai-extras.el:
+  ;; `key' appears bare in the `&key' list, no default form) — omit it and
+  ;; the backend silently sends no auth header at all ("x-api-key header is
+  ;; required" from Anthropic, the first real bug found running this setup).
+  (setq gptel-backend (gptel-make-anthropic "Claude"
+                        :stream t :key #'gptel-api-key-from-auth-source)
+        gptel-model 'claude-sonnet-5)
+  (gptel-make-openai "ChatGPT" :stream t :key #'gptel-api-key-from-auth-source)
+  ;; OpenRouter has no gptel-maintained catalog (it proxies hundreds of
+  ;; third-party models), so `:models' here is mandatory, not optional.
+  ;; This is a small curated starter set, not the full catalog — extend as
+  ;; wanted; OpenRouter's live list is at https://openrouter.ai/api/v1/models.
+  (gptel-make-openai "OpenRouter"
+    :host "openrouter.ai"
+    :endpoint "/api/v1/chat/completions"
+    :stream t
+    :key #'gptel-api-key-from-auth-source
+    :models '(anthropic/claude-sonnet-5
+              anthropic/claude-opus-5
+              openai/gpt-5.4
+              google/gemini-3.5-flash))
+  (gptel-make-perplexity "Perplexity"
+    :stream t :key #'gptel-api-key-from-auth-source))
+
+(defvar cm/gptel-map (make-sparse-keymap)
+  "Keymap for gptel commands under `C-c g'.")
+(global-set-key (kbd "C-c g") cm/gptel-map)
+(define-key cm/gptel-map (kbd "g") #'gptel)
+(define-key cm/gptel-map (kbd "s") #'gptel-send)
+(define-key cm/gptel-map (kbd "r") #'gptel-rewrite)
+(define-key cm/gptel-map (kbd "a") #'gptel-add)
+(define-key cm/gptel-map (kbd "m") #'gptel-menu)
+
+;;;; gptel-magit — commit-message drafting from the staged diff.
+;; Own binding, gptel-magit's own convention, not part of cm/gptel-map:
+;; M-g in a git-commit buffer drafts from the diff; `d' then `x' on a magit
+;; diff section explains it.
+(use-package gptel-magit
+  :hook (magit-mode . gptel-magit-install))
+
 ;;;; Keybinding cheat sheet (high-frequency).
 ;; Search/navigation:
 ;;   C-S-s   consult-line (region-seeded)
@@ -2475,6 +2545,14 @@ Call this interactively with \\[cm/ai-show-suggestions] or remotely via:
 ;;   C-c a a  accept AI suggestion
 ;;   C-c a d  diff current vs AI suggestion
 ;;   C-c a S  show *ai-suggestions* buffer (n/p/a/d/q)
+;;
+;; gptel (general LLM chat — distinct from the AI writing assistant above):
+;;   C-c g g  open/switch to gptel chat buffer
+;;   C-c g s  gptel-send
+;;   C-c g r  gptel-rewrite
+;;   C-c g a  gptel-add (add region/buffer to context)
+;;   C-c g m  gptel-menu (transient: backend/model/params)
+;;   M-g      (in git-commit buffer) draft commit message via gptel-magit
 ;;
 ;; AI writing assistant (remote — Claude Code calls via emacsclient -e):
 ;;   (cm/ai-current-context)         → JSON metadata for focused buffer

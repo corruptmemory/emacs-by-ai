@@ -392,6 +392,14 @@ own binding convention, not part of `cm/gptel-map`.
 auto-enabling `gptel-mode` in any buffer — everything above is on-demand via
 the keybindings only.
 
+**Presets (gptel's own dynamic profile system — not implemented yet):**
+research notes on gptel's presets feature (named bundles of backend/
+model/system-prompt/tools/destination-behavior, applied via the transient
+menu or an `@preset-name` token in the prompt) are at
+`docs/gptel-presets.md`, including which presets need no tool-granting
+(lowest-risk starting point: `rewrite`- and `annotate`-style presets) versus
+which reopen the tool-use scope question deferred above.
+
 ## Multi-root project search ("Add Folder to Project")
 
 `cm-project-roots.el` (a sibling library loaded from `init.el`, like `jai-ts-mode.el`) adds opt-in commands that run search/navigation across directories listed in a `.project-roots` file at the primary project root. The primary root is implicit; extra dirs are one-per-line (`#` comments, `~`/relative allowed, missing dirs skipped with a warning). `cm/project-roots` is the single source of truth all commands read.

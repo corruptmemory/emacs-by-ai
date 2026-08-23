@@ -26,7 +26,7 @@ The file is organized in this order:
 
 1. **Startup/bootstrap** — timing display, straight.el bootstrap, use-package integration
 2. **Core settings** — custom file, local overrides, backups, auto-revert, delete-selection, electric-indent, electric-pair (auto-close + brace expansion on RET), tabs, performance (bidi off, skip fontification on input, 4MB process buffer), kill ring (clipboard preservation, dedup), editing niceties (auto-chmod scripts, no ffap pings, string re-builder syntax, auto-select help windows, repeat mark popping), recentf, saveplace (with recenter after restore), per-instance server (PID-named, stale socket cleanup)
-3. **PATH** — adds ~/.cargo/bin, ~/.local/bin, ~/go/bin, ~/projects/Odin, ~/projects/ols to exec-path
+3. **PATH** — adds ~/.cargo/bin, ~/.local/bin, ~/go/bin, ~/projects/Odin, ~/projects/ols to exec-path; then the `mise` package (`global-mise-mode`) layers per-directory, buffer-local tool environments on top (Ruby/etc. via mise — see "Ruby / Rails")
 4. **Theme and fonts** — loads dracula-pro-blade with fringe-contrast advice; `fontaine` presets (TX-02 mono + Inter variable + JoyPixels emoji); `mixed-pitch-mode` auto-enabled in prose modes with `C-c T p` toggle; shared heading-scale machinery for org + markdown
 5. **Scrolling** — pixel-scroll-precision-mode with wheel/trackpad profiles driven by `cm/mouse-profile`; trackpad flips horizontal scroll and disables interpolated page scroll for instant PgUp/PgDn
 6. **Keybindings and editing** — winner-mode (layout undo/redo, reversible `C-x 1`), proportional window resizing, windmove, quick toggles (`C-c T` prefix), chunk word motion (`cm/` prefix), line movement, sexp navigation
@@ -76,7 +76,7 @@ Confirm with `M-: (memq 'markdown-table-face mixed-pitch-fixed-pitch-faces)`. If
 
 ## Custom LSP Servers
 
-Non-default eglot server entries are configured for: Odin (`ols`), Zig (`zls`), go-templ (`templ lsp`), GLSL (`glslls`), Fish (`fish-lsp`), Haskell (`haskell-language-server-wrapper`), Harper (`harper-ls` — grammar/spell checking for org/markdown/text modes).
+Non-default eglot server entries are configured for: Odin (`ols`), Zig (`zls`), go-templ (`templ lsp`), GLSL (`glslls`), Fish (`fish-lsp`), Haskell (`haskell-language-server-wrapper`), Ruby/Rails (`ruby-lsp` — Shopify's server; see "Ruby / Rails" below), Harper (`harper-ls` — grammar/spell checking for org/markdown/text modes).
 
 Jai (`jails`) is **intentionally left unwired**, even though the `jails` binary is now installed (`~/.local/bin/jails`) and a `jails.json` exists in `~/projects/game-bootstrap`. jails is flakey and slow and tends to drop code navigation entirely when it breaks; the preferred setup is graceful degradation over an unreliable LSP — `jai-ts-mode` regex font-lock + `dumb-jump` + the `C-c w` multi-root grep commands (see "Multi-root project search" below), which lands in the "good enough" zone. Do **not** uncomment the `eglot-server-programs` entry or add `jai-ts-mode` to the eglot hook list.
 
@@ -127,6 +127,84 @@ HEAD..origin/master --oneline` / `git log origin/master..HEAD --oneline` both
 come back non-empty (should both be empty after a real reclone). Fixed by
 applying the `rm -rf` step above; verified via those same two log commands
 returning empty and `not_in` present in the checked-out file.
+
+## Ruby / Rails
+
+Added 2026-08-23 (interview refresh). Major mode is built-in **`ruby-ts-mode`**
+(tree-sitter; grammar via treesit-auto). The `init.el` block sits in the
+language-configs section right after Haskell; the eglot wiring lives in the
+eglot `use-package` form (`ruby-ts-mode` in the `eglot-ensure` hook list + an
+explicit `eglot-server-programs` entry).
+
+**LSP — Shopify `ruby-lsp`** (not Solargraph). It is a **gem, not an Emacs
+package**: install once with `gem install ruby-lsp` (installed here under mise
+Ruby 3.4.x → resolvable at `~/.local/share/mise/installs/ruby/3/bin/ruby-lsp`,
+which is on `PATH`, so a shell-launched Emacs finds it via `executable-find`).
+On first run in a project ruby-lsp bootstraps a per-project **"composed bundle"**
+(`.ruby-lsp/`) that layers the server + addons on top of the app's real gems —
+so you do **not** add ruby-lsp to the app's `Gemfile`.
+
+- **The eglot entry is explicit on purpose.** Eglot 30.2 already ships a *smart*
+  ruby contact that auto-detects `ruby-lsp` (with a solargraph fallback), but it
+  `completing-read`-prompts when **both** are on `PATH`. The prepended
+  `'((ruby-ts-mode ruby-mode) . ("ruby-lsp"))` entry forces ruby-lsp
+  deterministically (add-to-list prepends → first match wins).
+
+**Rails intelligence — the `ruby-lsp-rails` addon.** Add `gem "ruby-lsp-rails"`
+to the Rails app's `Gemfile` (`:development` group) and `bundle install`;
+ruby-lsp auto-detects and loads it. It **boots the app in the background** to
+answer against the real runtime: hover-shows-ActiveRecord-schema/columns,
+go-to-definition across associations/callbacks/framework methods, jump-to/run
+migrations, view routes. This is the modern replacement for both
+`projectile-rails`' filename-guess navigation and old robe-style introspection.
+
+**Supporting packages** (in the `;;;; Ruby / Rails.` block; straight-installed):
+
+- **`inf-ruby`** — IRB/Pry REPL and `rails console` as an inferior process;
+  `inf-ruby-minor-mode` hooked into `ruby-ts-mode` (send-to-REPL: `C-c C-s`
+  start, `C-c C-z` switch, `C-c C-r` region, `C-x C-e` eval). `inf-ruby-switch-setup`
+  (in `:config`) makes a compilation/test buffer drop into an interactive REPL on
+  a `binding.pry` / `binding.irb` / debugger breakpoint.
+- **`rspec-mode`** — hooked into `ruby-ts-mode`; `C-c ,` prefix (`v` verify file,
+  `s` single example, `r` rerun, `a` verify all, `t` toggle spec↔impl). Spring
+  (Rails' preloader) disabled (`rspec-use-spring-when-possible nil`) — it caches
+  code between runs and is a classic "why is my test stale?" trap.
+- **`web-mode`** — ERB view templates, scoped to `\\.erb\\'` **only** so it never
+  competes with our other HTML handling; 2-space indent (Rails convention),
+  auto-pairing deferred to the global `electric-pair-mode`.
+
+**Why there is NO `auto-mode-alist` block** (and don't add one): unlike the
+CMake basename gotcha, Ruby needs no manual file associations. treesit-auto's
+ruby recipe **both** remaps `ruby-mode` → `ruby-ts-mode` **and** registers an
+`:ext` regex covering `.rb .ru .rake .thor .jbuilder .rabl .gemspec .podspec`
+plus basenames `Gemfile Rakefile Capfile Thorfile Puppetfile Berksfile Brewfile
+Vagrantfile Guardfile Podfile` → `ruby-ts-mode`; the built-in `ruby-mode`
+autoload maps the same set independently. Two layers already cover it, and Ruby
+basenames have no extension for a generic rule to steal. A manual block would be
+dead config.
+
+**Ruby toolchain is mise** (not rbenv/chruby), and the environment is handled by
+the **`mise` Emacs package** (`eki3z/mise.el`; `global-mise-mode`, wired in the
+PATH/exec-path area of `init.el` — see the `;;;; mise` block there). It is
+envrc-style: it runs `mise env` per directory and sets **buffer-local**
+`exec-path`/`process-environment`, so eglot starts `ruby-lsp` under **that
+project's** Ruby — correct regardless of how Emacs was launched (shell *or*
+GUI/WM, no login shell required) and even with multiple projects pinned to
+different Ruby versions open at once. Its `inheritenv` dependency makes
+temp-buffer subprocess spawns inherit the buffer-local env, which is what lets
+eglot pick up the right binary. No `rbenv.el`/`chruby.el` needed; mise covers it.
+(Before mise.el, correctness relied on launching Emacs from a shell where the
+project's Ruby was already active via `mise activate` — fine for the
+ephemeral-one-project-per-terminal habit, but silently wrong under a shell-less
+GUI launch. `mise activate` is a *shell* hook and cannot help Emacs; the Emacs
+package is the real fix.)
+
+**Deliberately NOT wired:** `projectile-rails` (hard-depends on projectile;
+this config is `project.el` — ruby-lsp-rails navigation + `consult`/
+`project-find-file` + the `C-c w` multi-root grep cover it); `robe` (superseded
+by LSP, can conflict); Sorbet/Steep/TypeProf (type-checkers, niche);
+`enh-ruby-mode` (superseded by `ruby-ts-mode`). `bundler.el`/`rake.el` are
+reasonable nice-to-haves left out of the initial setup.
 
 ## Tree-Sitter and Arch Linux
 

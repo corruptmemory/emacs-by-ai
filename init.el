@@ -233,6 +233,20 @@ image-only clipboard (which would emit \"couldn't convert\" chatter)."
     (unless (string-match-p (regexp-quote expanded) (getenv "PATH"))
       (setenv "PATH" (concat expanded ":" (getenv "PATH"))))))
 
+;;;; mise — per-directory tool environments (Ruby/Node/… managed via mise).
+;; envrc-style: runs `mise env' per buffer and sets buffer-local `exec-path' /
+;; `process-environment', so subprocesses (eglot's ruby-lsp, compile, inf-ruby)
+;; use the mise-resolved toolchain for THAT buffer's directory.  This is correct
+;; even when Emacs is launched with no shell (GUI/WM) and when one instance
+;; opens projects pinned to different tool versions — cases the "inherit the
+;; launching shell's PATH once" approach silently gets wrong.  `inheritenv' (a
+;; hard dependency) makes temp-buffer subprocess spawns inherit that buffer-local
+;; env, which is what lets eglot start the right server binary.  Enabled at
+;; `after-init' so the manual PATH block above is part of the base environment
+;; mise layers onto.  Needs the `mise' CLI (>= 2025.7.1) on PATH.
+(use-package mise
+  :hook (after-init . global-mise-mode))
+
 ;;;; Theme load path.
 (add-to-list 'custom-theme-load-path
              (expand-file-name "themes/" user-emacs-directory))
@@ -1032,6 +1046,7 @@ Valid entries must have a regexp string as their car."
     zig-mode
     odin-mode
     haskell-mode
+    ruby-ts-mode
     templ-ts-mode) . eglot-ensure)
   :custom
   (eglot-extend-to-xref t)
@@ -1053,6 +1068,14 @@ Valid entries must have a regexp string as their car."
   (add-to-list 'eglot-server-programs '(fish-mode . ("fish-lsp" "start")))
   (add-to-list 'eglot-server-programs
                '((haskell-mode) . ("haskell-language-server-wrapper" "--lsp")))
+  ;; Ruby / Rails -- Shopify ruby-lsp (install once: gem install ruby-lsp).
+  ;; Eglot 30.2's built-in ruby entry already auto-detects ruby-lsp (with a
+  ;; solargraph fallback), but it `completing-read'-prompts when BOTH are on
+  ;; PATH; this explicit, prepended entry forces ruby-lsp deterministically.
+  ;; ruby-lsp bootstraps a per-project "composed bundle" and auto-loads the
+  ;; ruby-lsp-rails addon when that gem is in the app's Gemfile.  See CLAUDE.md.
+  (add-to-list 'eglot-server-programs
+               '((ruby-ts-mode ruby-mode) . ("ruby-lsp")))
   ;; jails (Jai LSP) must be built manually from ~/projects/Jails.
   ;; Uncomment once the binary exists at ~/projects/Jails/bin/jails.
   ;; (add-to-list 'eglot-server-programs
@@ -1785,6 +1808,44 @@ narrow with truncation save.  Otherwise → error."
 
 ;;;; Haskell.
 (use-package haskell-mode)
+
+;;;; Ruby / Rails.
+;; Major mode is built-in `ruby-ts-mode' (tree-sitter).  treesit-auto already
+;; owns the file associations — its ruby recipe remaps `ruby-mode' and
+;; registers Gemfile/Rakefile/.rake/.gemspec/.ru/… → `ruby-ts-mode' — so no
+;; `auto-mode-alist' block is needed here (cf. the CMake basename gotcha, which
+;; does NOT apply to Ruby).  LSP is Shopify ruby-lsp, wired in the eglot block
+;; above; the Rails intelligence rides along when the app's Gemfile carries the
+;; `ruby-lsp-rails' gem.  This section adds the surrounding tooling only.
+
+;; inf-ruby — IRB/Pry REPL and `rails console' as an inferior process.  The
+;; minor mode adds send-to-REPL bindings in Ruby buffers (C-c C-s start,
+;; C-c C-z switch, C-c C-r send region, C-x C-e eval line).
+(use-package inf-ruby
+  :hook (ruby-ts-mode . inf-ruby-minor-mode)
+  :config
+  ;; Auto-switch a compilation/test buffer into an interactive REPL when it
+  ;; hits a binding.pry / binding.irb / debugger breakpoint.
+  (inf-ruby-switch-setup))
+
+;; rspec-mode — run and navigate RSpec specs (C-c , prefix: v verify file,
+;; s single example at point, r rerun, a verify all, t toggle spec↔impl).
+(use-package rspec-mode
+  :hook (ruby-ts-mode . rspec-mode)
+  :custom
+  ;; Spring (Rails' app preloader) caches code between runs and is a classic
+  ;; source of "why is my test running stale code?" confusion; skip it.
+  (rspec-use-spring-when-possible nil))
+
+;; web-mode — ERB view templates.  Scoped to .erb only so it never competes
+;; with our other HTML handling; 2-space indent to match Rails conventions.
+;; Defer pairing to the global electric-pair-mode rather than web-mode's own.
+(use-package web-mode
+  :mode "\\.erb\\'"
+  :custom
+  (web-mode-markup-indent-offset 2)
+  (web-mode-code-indent-offset 2)
+  (web-mode-enable-auto-pairing nil))
 
 ;;;; pdf-tools — PDF viewer with annotation support.
 (use-package pdf-tools

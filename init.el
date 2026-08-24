@@ -2514,9 +2514,10 @@ Call this interactively with \\[cm/ai-show-suggestions] or remotely via:
 ;; Distinct from the cm/ai-* protocol above: that's a file-exchange bridge
 ;; specifically to the Claude Code CLI (agentic, project-aware). gptel is a
 ;; plain multi-backend chat client for quick in-buffer Q&A/rewrites and an
-;; Org-mode research notebook — no agentic/file-editing capability, no
-;; overlap in job. Tool-use/MCP integration deliberately deferred; this is
-;; chat + rewrite + context-add only.
+;; Org-mode research notebook. The plain client is chat + rewrite +
+;; context-add only; agentic capability (file/Bash/Emacs-introspection) lives
+;; in the separate gptel-agent block below, opt-in via C-c g A. MCP wiring is
+;; still deferred (see that block and CLAUDE.md).
 ;;
 ;; API keys read via auth-source from ~/.authinfo (plain text, chmod 600) —
 ;; never hardcoded here. Required entries, one per backend in use:
@@ -2580,6 +2581,28 @@ Call this interactively with \\[cm/ai-show-suggestions] or remotely via:
 (use-package gptel-magit
   :hook (magit-mode . gptel-magit-install))
 
+;;;; gptel-agent — agentic mode for gptel (files/Bash/Emacs-introspection).
+;; First-party (karthink).  Opt-in: plain `C-c g' chat stays the default; agent
+;; mode is entered via `C-c g A' (or an `@gptel-agent' prompt token).  Full
+;; autonomy: `gptel-confirm-tool-calls' nil makes tool calls run WITHOUT
+;; per-call confirmation, overriding even the packaged agent's `:confirm t'
+;; tools (the confirm `cond' in gptel-request.el short-circuits when the var is
+;; nil) — reversibility is delegated to git/undo/magit ("going back in time is
+;; what git is for").  We set the plain-gptel variable rather than forking the
+;; packaged gptel-agent.md, whose long upstream system prompt we don't want to
+;; drift from.  Requires a current gptel (README): if the agent errors on a
+;; missing function, `M-x straight-pull-package RET gptel'.  Keep the backend on
+;; a tool-capable model (Claude/OpenAI/OpenRouter) — Perplexity has no tool use.
+;; Note: agent mode is materially more token-hungry than plain gptel.
+(use-package gptel-agent
+  :straight t
+  :after gptel
+  :init
+  (setq gptel-confirm-tool-calls nil)   ; full autonomy; git is the undo net
+  :config
+  (gptel-agent-update)                  ; load agent specs, register presets/tools
+  (define-key cm/gptel-map (kbd "A") #'gptel-agent))  ; C-c g A → agent session
+
 ;;;; Keybinding cheat sheet (high-frequency).
 ;; Search/navigation:
 ;;   C-S-s   consult-line (region-seeded)
@@ -2613,6 +2636,7 @@ Call this interactively with \\[cm/ai-show-suggestions] or remotely via:
 ;;   C-c g r  gptel-rewrite
 ;;   C-c g a  gptel-add (add region/buffer to context)
 ;;   C-c g m  gptel-menu (transient: backend/model/params)
+;;   C-c g A  gptel-agent (start an agentic session in this project)
 ;;   M-g      (in git-commit buffer) draft commit message via gptel-magit
 ;;
 ;; AI writing assistant (remote — Claude Code calls via emacsclient -e):

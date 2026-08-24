@@ -1,8 +1,10 @@
 # Agentic gptel (`gptel-agent`) — Design
 
 **Date:** 2026-08-24
-**Status:** Approved 2026-08-24. Implementation plan pending (writing-plans).
-Not yet implemented.
+**Status:** Implemented and shipped to `master` 2026-08-24 (user-confirmed on a
+live frame, preliminary testing). See "Implementation notes (as shipped)" at the
+end. Commits `171dd10` (block + `C-c g A`), `2843698` (`C-c g P`), `b3d2ab0`
+(docs).
 
 ## Goal
 
@@ -222,4 +224,32 @@ No ERT suite: this is configuration with no pure logic of our own to test
   `README.md` — a short "gptel agent mode" note if the gptel feature is surfaced
   there.
 - **New:** none.
+
+## Implementation notes (as shipped)
+
+Executed inline (executing-plans) across the plan's three tasks; batch-verified
+each and the full config load; ERT suite green (54/54, unrelated to the change);
+user-confirmed with preliminary live testing 2026-08-24. Close to the design;
+five points worth recording:
+
+1. **`yaml.el` came along.** Installing `gptel-agent` transitively pulled in
+   `yaml.el` (it parses agent-spec front-matter). Harmless, but the next machine
+   gets one extra clone/build on first load — not just the one package.
+2. **The gptel straight-pull contingency never fired.** The installed gptel was
+   already current enough: `gptel-agent` loaded and registered its
+   `gptel-agent`/`gptel-plan` presets against it with no missing-function error.
+   The `straight-pull-package gptel` step remains the documented fix *if* a
+   staler machine errors.
+3. **`C-c g P` = `cm/gptel-plan`, no `gptel-preset` internals needed.** The
+   packaged `gptel-agent` command already accepts a preset argument
+   (`gptel-agent.el:665`), so `cm/gptel-plan` just replicates gptel-agent's own
+   project-root resolution and calls `(gptel-agent DIR 'gptel-plan)`. Uses
+   `if-let*` (Emacs-31-safe).
+4. **Full autonomy confirmed against source, not assumed.** `gptel-confirm-tool-calls`
+   defaults to `auto` (respect per-tool `:confirm`); set to `nil` it short-circuits
+   the confirm `cond` in `gptel-request.el`, so even the packaged agent's
+   `:confirm t` tools run without a prompt.
+5. **No out-of-project guard, by decision.** Ambient `default-directory` scoping
+   plus git-as-undo was accepted as sufficient; an explicit absolute path can
+   still write outside the repo (documented, not guarded).
 ```

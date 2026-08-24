@@ -38,7 +38,7 @@ The file is organized in this order:
 12. **Popup/buffer management** — Popper with project-based grouping, helpful; `ghostel` (libghostty-vt-backed terminal, replaces vterm) declared separately
 13. **Dev tooling** — treesit-auto, yasnippet, eglot (20+ language hooks, autoreconnect, harper-ls for writing modes), eglot-booster, consult-eglot, eldoc-box, flymake, dape (DAP)
 14. **Language configs** — Go (format-on-save, gotest, dape/Delve wrappers with auto-breakpoint), SQL (xref helpers, completion), docker, pdf-tools, compile-mode tweaks (ANSI color + Jai `line,column` error navigation — see below), then all other languages
-15. **AI writing assistant** — `cm/ai-*` exchange protocol for Claude Code integration (`C-c a` prefix), shared via `~/.emacs-ai/`, interactive `*ai-suggestions*` review buffer (`C-c a S`); immediately followed by **gptel** — general multi-backend LLM chat client (`C-c g` prefix), unrelated job (plain chat/rewrite, no agentic capability) — see below
+15. **AI writing assistant** — `cm/ai-*` exchange protocol for Claude Code integration (`C-c a` prefix), shared via `~/.emacs-ai/`, interactive `*ai-suggestions*` review buffer (`C-c a S`); immediately followed by **gptel** — general multi-backend LLM chat client (`C-c g` prefix), unrelated job (plain chat/rewrite; agentic mode added opt-in via gptel-agent) — see below
 16. **Multi-root project search** — `cm-project-roots.el` (loaded after the consult-eglot block): opt-in `C-c w` commands spanning dirs listed in a `.project-roots` file; LSP-first jump/refs, rg-based search/find-file; see below
 17. **Project TAGS auto-loading** — `cm-project-tags.el` (loaded after the multi-root block): on `find-file`, if the project root holds a `TAGS` file, load it buffer-locally and install the `cm/tags-cascade` xref backend (etags → dumb-jump fallback; yields to Eglot). See below.
 18. **Per-project session persistence** — `cm-project-sessions.el` (loaded after
@@ -403,12 +403,13 @@ For presenting multiple rewrite options, Claude Code writes `~/.emacs-ai/suggest
 
 ## gptel (general LLM chat client)
 
-`gptel` is a plain multi-backend chat client — distinct from the AI Writing
+`gptel` is a multi-backend chat client — distinct from the AI Writing
 Assistant above, which is a file-exchange bridge specifically to the Claude
-Code CLI (agentic, project-aware). gptel has no agentic/file-editing
-capability and no job overlap with it: it's for quick in-buffer Q&A/rewrites
-and an Org-mode research notebook. Tool-use/MCP integration was deliberately
-left out of the initial setup — this is chat + rewrite + context-add only.
+Code CLI (agentic, project-aware). The *plain* client is quick in-buffer
+Q&A/rewrites and an Org-mode research notebook — chat + rewrite + context-add.
+Agentic capability (file read/write/edit, Bash, Emacs introspection) is added
+**opt-in** by the separate `gptel-agent` layer — see "Agent mode (gptel-agent)"
+below; MCP/tool-collection bridging remains deferred.
 
 **Backends registered** (`init.el`, right after the AI Writing Assistant
 block): Anthropic/Claude (`claude-sonnet-5`, the default backend/model at
@@ -460,15 +461,59 @@ by the AI Writing Assistant protocol above):
 - `C-c g r` — `gptel-rewrite` (region refactor/rewrite with diff preview)
 - `C-c g a` — `gptel-add` (add region/buffer/file to context)
 - `C-c g m` — `gptel-menu` (transient: switch backend/model, params, presets)
+- `C-c g A` — `gptel-agent` (start an agentic session in the current project — see below)
+- `C-c g P` — `cm/gptel-plan` (read-only planning session; header-line button toggles to the full agent)
 
 **gptel-magit** (separate package, `:hook (magit-mode . gptel-magit-install)`
 so it loads lazily): `M-g` in a `git-commit` buffer drafts a commit message
 from the staged diff; on a magit diff section, `d` then `x` explains it. Its
 own binding convention, not part of `cm/gptel-map`.
 
-**Not wired up (deliberately deferred):** MCP/tool-calling (`mcp.el`),
-auto-enabling `gptel-mode` in any buffer — everything above is on-demand via
-the keybindings only.
+### Agent mode (gptel-agent)
+
+`gptel-agent` (karthink's first-party "agent mode for gptel", MELPA/straight; a
+new dep that also pulls in `yaml.el` for parsing agent front-matter) turns gptel
+into a claude-code-style in-Emacs agent. It is a gptel **preset** bundling a
+system prompt + tools + sub-agents: web (search / URL fetch), local files
+(read/write/edit), Bash, and Emacs state (documentation + Elisp eval), plus
+`executor` / `researcher` / `introspector` sub-agents that don't share the main
+session's context. Its real edge over the Claude Code CLI is operating on *live
+Emacs state* — unsaved buffers, buffer context, introspection — which a
+file-on-disk CLI can't see.
+
+- **Opt-in, never ambient.** Plain `C-c g` chat/rewrite is unchanged. Enter agent
+  mode with `C-c g A` (`gptel-agent` — new session in the current project) or by
+  including `@gptel-agent` in a prompt. `C-c g P` (`cm/gptel-plan`) starts the
+  read-only planning variant; a running session's header line carries a
+  `[Plan]`/`[Agent]` button to toggle between them.
+- **Full autonomy — git is the undo net.** `(setq gptel-confirm-tool-calls nil)`
+  in the block's `:init` makes tool calls run with **no per-call confirmation**,
+  overriding even the packaged agent's `:confirm t` tools (the confirm `cond` in
+  `gptel-request.el` short-circuits when the var is nil; its default is `auto` =
+  respect the per-tool slot). Deliberate posture: "going back in time is what git
+  is for." We set the plain-gptel *variable* rather than forking the packaged
+  `gptel-agent.md` — copying its long upstream system prompt to flip one boolean
+  would drift off upstream (cf. the odin-mode stale-clone saga).
+- **Project scoping is ambient.** A session binds `default-directory` to the
+  `project-current` root; Bash and relative file ops act there. Escaping the repo
+  needs an explicit absolute path (git won't cover that — accepted, not guarded).
+- **Constraints.** Backend must be tool-capable (Claude / OpenAI / OpenRouter —
+  **not** Perplexity, which has no tool use). Needs a *current* gptel: if the
+  agent errors on a missing function, `M-x straight-pull-package RET gptel`.
+  Materially more token-hungry than plain gptel.
+- **Why the `-t Use tools` toggle looked dead before:** it was on, but
+  `gptel-tools` was empty — nothing had registered any tools. Applying the
+  `gptel-agent` preset (via `C-c g A` / `@gptel-agent`) is what populates them.
+
+Design + plan: `docs/plans/2026-08-24-agentic-gptel-{design,plan}.md`.
+
+**Not wired up (deliberately deferred):** MCP bridging (`mcp.el`) and a future
+open-brain MCP tool category; `macher` (review-before-apply multi-file editing)
+**until after Emacs 31 lands** — its `diff-apply-buffer` step mishandles
+new/deleted files on Emacs 30.x, fixed in 31 (cross-ref
+`docs/emacs-31-migration.md`); custom sub-agents mirroring `.claude/agents`;
+auto-enabling `gptel-mode` in any buffer. Tool-calling itself is now wired — via
+`gptel-agent` (above), not raw `gptel-make-tool`.
 
 **Presets (gptel's own dynamic profile system — not implemented yet):**
 research notes on gptel's presets feature (named bundles of backend/

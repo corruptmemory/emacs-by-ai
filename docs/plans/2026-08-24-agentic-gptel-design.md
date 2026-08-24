@@ -1,7 +1,8 @@
 # Agentic gptel (`gptel-agent`) — Design
 
 **Date:** 2026-08-24
-**Status:** Design — awaiting user review. Not yet implemented.
+**Status:** Approved 2026-08-24. Implementation plan pending (writing-plans).
+Not yet implemented.
 
 ## Goal
 
@@ -198,7 +199,13 @@ No ERT suite: this is configuration with no pure logic of our own to test
 
 ## Out of scope
 
-- `macher` (review-before-apply multi-file editing) — deferred, additive.
+- `macher` (review-before-apply multi-file editing) — deferred **until after
+  Emacs 31 lands** (user decision, 2026-08-24). Rationale: macher's patch-apply
+  step leans on `diff-apply-buffer`, which Emacs 30.x mishandles for patches that
+  create or delete files (macher FAQ / macher#45); the fix ships in Emacs 31. So
+  macher is worth adding precisely when this config moves to 31 — a natural item
+  for `docs/emacs-31-migration.md`. Additive and coexists with `gptel-agent` when
+  it lands (`@macher` vs `@gptel-agent`, chosen per-task).
 - `mcp.el` bridging / the **open-brain** MCP tool category — deferred, additive.
 - Custom sub-agents mirroring `.claude/agents` — deferred; the built-in
   `executor`/`researcher`/`introspector` are enough for v1.

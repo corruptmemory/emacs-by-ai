@@ -2603,6 +2603,19 @@ Call this interactively with \\[cm/ai-show-suggestions] or remotely via:
   (gptel-agent-update)                  ; load agent specs, register presets/tools
   (define-key cm/gptel-map (kbd "A") #'gptel-agent))  ; C-c g A → agent session
 
+(defun cm/gptel-plan ()
+  "Start a read-only `gptel-plan' planning session in the current project.
+Like `gptel-agent' (\\[gptel-agent], C-c g A) but loads the read-only planning
+preset: read-only filesystem tools, instructed to produce a systematic plan of
+action rather than edit.  Switch to the full agent mid-session with the
+[Plan]/[Agent] button in the header line."
+  (interactive)
+  (gptel-agent (if-let* ((proj (project-current)))
+                   (project-root proj)
+                 default-directory)
+               'gptel-plan))
+(define-key cm/gptel-map (kbd "P") #'cm/gptel-plan)  ; C-c g P → planning session
+
 ;;;; Keybinding cheat sheet (high-frequency).
 ;; Search/navigation:
 ;;   C-S-s   consult-line (region-seeded)
@@ -2637,6 +2650,7 @@ Call this interactively with \\[cm/ai-show-suggestions] or remotely via:
 ;;   C-c g a  gptel-add (add region/buffer to context)
 ;;   C-c g m  gptel-menu (transient: backend/model/params)
 ;;   C-c g A  gptel-agent (start an agentic session in this project)
+;;   C-c g P  cm/gptel-plan (read-only planning session; toggle to agent in header)
 ;;   M-g      (in git-commit buffer) draft commit message via gptel-magit
 ;;
 ;; AI writing assistant (remote — Claude Code calls via emacsclient -e):

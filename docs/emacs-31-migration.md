@@ -12,10 +12,17 @@ behaviors that will **change or be noticed**, and (4) a pre-flight checklist.
 
 ---
 
-## 0. Release status (as of 2026-08-13)
+## 0. Release status
 
-Emacs 31 is **in pretest**, not yet released. Ground truth from the Emacs git
-repo and the emacs-devel announcements:
+**Update 2026-08-24: Emacs 31.1 landed and is installed on this machine**
+(`GNU Emacs 31.1 (build 2, ...)`, replacing the pinned 30.2). The pretest
+timeline below is preserved as historical record; Parts 2–4 are now live, not
+speculative — treat their status boxes as the actual migration state, not a
+forecast.
+
+Original status snapshot, as of 2026-08-13 — Emacs 31 was **in pretest**, not
+yet released. Ground truth from the Emacs git repo and the emacs-devel
+announcements at the time:
 
 | Signal | Value |
 |---|---|
@@ -245,6 +252,88 @@ straight rebuild; not ours to fix.
 (`init.el:1118–1133`). Verify no new default `C-x p …` binding collides with our
 session bindings or the `C-c N` scratch command after the upgrade — low risk,
 quick check.
+
+### 3.12 `templ-ts-mode` needed three compat shims to load/work on 31 `[x] done`
+
+**Hit:** 2026-08-24, the first session on 31.1. `use-package templ-ts-mode`
+errored at Emacs startup: `Error (use-package): templ-ts-mode/:catch:
+Symbol's function definition is void: go-ts-mode--iota-query-supported-p`
+(popped a live `*Backtrace*` mid-`gptel-agent` session when the agent tried
+to Read a file that ended up going through the same font-lock-settings load
+path — a red herring at first glance, but the real cause was purely
+Emacs-31-vs-templ-ts-mode, unrelated to gptel/gptel-agent).
+
+`templ-ts-mode.el` ([danderson/templ-ts-mode](https://github.com/danderson/templ-ts-mode),
+unmaintained — no commits since 2025-02-23, confirmed at HEAD, no upstream fix
+to pull) hand-copies go-ts-mode's and js.el's Emacs-30-era font-lock/indent
+rule *source* into its own top-level `defvar`s, because upstream go-ts-mode
+and js.el only expose the *compiled* settings via a variable, not the
+source (its own comment says as much). Emacs 31 changed the shape of exactly
+what got copied, in three distinct ways, so this needed three distinct
+compat shims — all as `:preface`/`:config` forms on the `templ-ts-mode`
+`use-package` block in `init.el` (no changes to the package source itself,
+same "advise a third-party quirk locally" pattern as the `slang-lsp-initialize`
+`delq` and `jai-ts-mode`'s js-mode-internals `let`-binding):
+
+1. **`go-ts-mode--iota-query-supported-p`** and **`go-ts-mode--method-elem-supported-p`**
+   — two internal (`--`) capability-probe *predicates* were deleted outright.
+   31's own `go-ts-mode--font-lock-settings` replaced per-rule-set boolean
+   gating with a general-purpose public helper, `treesit-query-with-optional`
+   (`treesit.el`): pass a mandatory query plus N optional queries, each
+   optional query is validated against the live grammar and only kept if it
+   compiles. templ-ts-mode calls the old predicates directly at **load
+   time** (inside its top-level `defvar`s), so both errors happen the moment
+   the package loads, one after the other — `use-package`'s `:catch` reports
+   and continues past each rather than aborting init.el, which is why fixing
+   the first predicate alone didn't visibly change anything until the second
+   was also fixed. Shim: redefine both predicates locally, replicating the
+   same capability probe via the long-stable public `treesit-query-compile`
+   (`(ignore-errors (treesit-query-compile 'templ QUERY t))`), probed against
+   the `templ` language specifically — that's the actual `:language` these
+   two font-lock rules run under in templ-ts-mode.el, not `go`.
+2. **`js--treesit-indent-rules`** and **`js--treesit-font-lock-settings`** —
+   these were precomputed *variables* in js.el on 30.x; 31 turned both into
+   no-arg *functions* of the same name that compute the same value on
+   demand. templ-ts-mode references both as bare variables (`(car
+   js--treesit-indent-rules)` at load time — the second startup error, once
+   the predicates above were fixed; `js-compiled js--treesit-font-lock-settings`
+   inside `templ-ts--setup`, which only fires when a `.templ` file is
+   actually opened, so this one was still-latent, not yet hit, when found).
+   Function and variable cells are independent in Elisp, so a symbol can
+   hold both without conflict — js-ts-mode itself only ever *calls* these as
+   functions elsewhere, unaffected. Shim: `(require 'js)` (these have no
+   autoload cookie of their own), then `(defvar js--treesit-indent-rules
+   (js--treesit-indent-rules))` and the font-lock-settings equivalent, each
+   guarded by `unless (boundp ...)`.
+3. **New "primary parser" guess crashes on templ-ts-mode's function-based
+   range rule.** 31 added a "primary parser" concept for multi-language
+   buffers: `treesit-major-mode-setup` now calls
+   `treesit--guess-primary-parser` whenever the mode hasn't already set
+   `treesit-primary-parser` itself, and that guess assumes the *first* entry
+   in `treesit-range-settings` is a query it can call
+   `treesit-query-language` on. templ-ts-mode's sole range rule
+   (`templ-ts--range-rules`) is function-based — an explicitly documented,
+   still-supported `treesit-range-rules` form (its own docstring: "QUERY can
+   also be a function that takes two arguments, START and END") — so the
+   guess crashed instead, only on actually opening a `.templ` file: `Wrong
+   type argument: treesit-compiled-query-p, templ-ts--treesit-update-ranges`.
+   `treesit-major-mode-setup`'s own docstring says exactly what to do here:
+   "multi-lang major mode's author should've ... set the primary parser
+   themselves." Shim: `:before` advice on `templ-ts--setup` (which runs
+   right before it calls `treesit-major-mode-setup`, and two lines later
+   creates this exact parser anyway — `treesit-parser-create` is idempotent
+   per buffer+language) setting `(setq-local treesit-primary-parser
+   (treesit-parser-create 'templ))`.
+
+**Verification:** all three confirmed via direct probing against the real
+Emacs 31.1 install and the real installed package (not guessed from
+changelogs) — `zcat`-ing the installed `go-ts-mode.el.gz`/`js.el.gz`/`treesit.el.gz`
+to see the actual replacement code, then a headless `emacs --batch -l init.el`
+load (batch mode's `--init-directory` flag does **not** load `init.el` —
+`-l init.el` does; the first verification attempt using
+`--init-directory` was a false negative, worth remembering) plus activating
+`templ-ts-mode` on real `.templ` content and running `font-lock-ensure`, all
+clean. Full `./tests/run-tests.sh` (54/54) unaffected.
 
 ---
 

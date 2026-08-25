@@ -218,18 +218,33 @@ emacs --batch --init-directory=~/.config/emacs -l init.el --eval '
 
 **Known incompatibility:** Emacs 30.2's `treesit.c` is incompatible with tree-sitter 0.26+ (predicate naming conflict — Emacs uses `#match`, tree-sitter 0.26 requires `#match?`, and both validate in C). As of 2026-04-09, this system runs `tree-sitter 0.25.10` + `emacs-wayland 30.2-1` with both pinned in `/etc/pacman.conf` `IgnorePkg`. If tree-sitter modes break after a system update, check `pacman -Qi tree-sitter` — if it's 0.26+, downgrade both packages and rebuild grammars. See `docs/tree-sitter-026-fix.md` for the full diagnosis and step-by-step fix.
 
-## Emacs 31 migration (planned)
+## Emacs 31 migration
 
-Emacs 31 is in pretest (as of 2026-08-13: branches `emacs-31`, pretests
-`31.0.90`/`31.0.91`, master already at `32.0.50`; no `31.1` date, autumn 2026
-plausible). `docs/emacs-31-migration.md` is the living ledger tracking its
-impact on **this** config — release status, a condensed feature overview, what
-we can drop/simplify (chiefly retiring `treesit-auto` in favor of built-in
-`treesit-enabled-modes` + `treesit-auto-install-grammar`, gated on grammar-source
-coverage and the tree-sitter 0.25.10 pin above), the behavior watch-list, and a
-pre-flight checklist. The one concrete edit already known: `go-ts-mode-indent-offset`
-(`init.el`) is renamed to `go-ts-indent-offset` in 31. Update the ledger's status
-boxes as items are resolved.
+**Landed 2026-08-24** (`GNU Emacs 31.1`, upgraded from the pinned 30.2 —
+tree-sitter stays pinned at 0.25.10 per the section above; that pin was about
+the tree-sitter *library*, unaffected by the Emacs jump). `docs/emacs-31-migration.md`
+is the living ledger tracking its impact on **this** config — release status
+(now historical), a condensed feature overview, what we can drop/simplify
+(chiefly retiring `treesit-auto` in favor of built-in `treesit-enabled-modes` +
+`treesit-auto-install-grammar`, gated on grammar-source coverage), the behavior
+watch-list, and a pre-flight checklist. Update the ledger's status boxes as
+remaining items are resolved. Two concrete items already known:
+
+- `go-ts-mode-indent-offset` (`init.el`) is renamed to `go-ts-indent-offset` in
+  31 — **not yet applied** (old name still works as a deprecated alias, so
+  this is a cosmetic cleanup, not urgent).
+- **`templ-ts-mode` needed three local compatibility shims to even load on 31**
+  — go-ts-mode dropped two internal capability-probe predicates
+  (`-iota-query-supported-p`, `-method-elem-supported-p`), js.el turned two
+  precomputed variables into functions of the same name
+  (`js--treesit-indent-rules`, `js--treesit-font-lock-settings`), and a brand
+  new "primary parser" guess in `treesit-major-mode-setup` chokes on
+  templ-ts-mode's function-based range rule. All three are copy-pasted/borrowed
+  go-ts-mode and js.el internals in the upstream package (unmaintained since
+  2025-02-23), not our own code. Fixed via `:preface`/`:config` shims in the
+  `templ-ts-mode` `use-package` block (`init.el`, right after the eglot
+  block's language configs) — full root-cause writeup and verification
+  transcript in `docs/emacs-31-migration.md` §3.12.
 
 ## CMake
 
@@ -509,6 +524,31 @@ file-on-disk CLI can't see.
 - **Why the `-t Use tools` toggle looked dead before:** it was on, but
   `gptel-tools` was empty — nothing had registered any tools. Applying the
   `gptel-agent` preset (via `C-c g A` / `@gptel-agent`) is what populates them.
+- **The Read tool has no binary-file guard (bit us for real, 2026-08-24) —
+  fixed locally.** Upstream `gptel-agent--read-file-lines` (verified against
+  the pinned commit, which is current `HEAD` — not something a package update
+  would have already fixed) does a bare `insert-file-contents` +
+  `buffer-string` with zero binary detection. Pointed at an image (e.g. a
+  `.png` screenshot sitting in a repo), it happily returns the raw decoded
+  bytes; that string is fine at the moment it's returned, but several calls
+  later `json-serialize` rejects it while building the *next* API request —
+  `(wrong-type-argument json-value-p "\211PNG...")` — crashing the whole FSM
+  into `*Backtrace*` with no legible tool-error message reaching the model (or
+  the user). This looked at first like an Emacs 31.1-upgrade regression (that's
+  when it was noticed) but isn't one: `json-serialize` has always rejected
+  invalid-UTF-8 strings on any Emacs with native JSON, so this would crash
+  identically on 30.x — confirmed by reproducing it via direct `elisp` call,
+  independent of any Emacs-version-specific behavior. Fixed with a local
+  `:around` advice on `gptel-agent--read-file-lines`
+  (`cm/gptel-agent--refuse-binary-files`, defined just above the `use-package
+  gptel-agent` block in `init.el`): a NUL byte in the first 8KB (the same
+  binary/text heuristic `git`/`diff` use) turns the call into a clean `(error
+  "... looks like a binary file ...")` instead — which flows through the exact
+  same tool-error path the function's own existing guard clauses
+  (unreadable/directory) already use, so the model gets a legible tool result
+  instead of a crash. Same "advise around a third-party quirk locally rather
+  than fork/patch upstream" pattern as the `slang-lsp-initialize` `delq` and
+  the `jai-ts-mode` js-mode-internals `let`-binding.
 
 Design + plan: `docs/plans/2026-08-24-agentic-gptel-{design,plan}.md`.
 

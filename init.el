@@ -1312,7 +1312,74 @@ if one isn't already set there."
 
 ;;;; go-templ.
 (use-package templ-ts-mode
-  :straight (:host github :repo "danderson/templ-ts-mode"))
+  :straight (:host github :repo "danderson/templ-ts-mode")
+  :preface
+  ;; Emacs 31 deleted two internal go-ts-mode capability-probe predicates
+  ;; (replaced by the public, per-query `treesit-query-with-optional' — see
+  ;; go-ts-mode.el's "constant" and "definition" font-lock rules).
+  ;; templ-ts-mode.el copies go-ts-mode's Emacs-30-era font-lock rules
+  ;; verbatim (its own comment: upstream go-ts-mode only exposes *compiled*
+  ;; settings, not the source) and calls both now-void functions directly at
+  ;; LOAD time, inside top-level `defvar's — so `use-package templ-ts-mode'
+  ;; errored at Emacs startup, first on
+  ;; "go-ts-mode--iota-query-supported-p", and (once that was shimmed) on
+  ;; "go-ts-mode--method-elem-supported-p" — `use-package''s :catch caught
+  ;; each and moved on rather than aborting init.el, which is why the first
+  ;; fix alone didn't visibly change anything until this second one landed
+  ;; too.  Upstream (github:danderson/templ-ts-mode) is unmaintained (no
+  ;; commits since 2025-02-23), so shim both predicates locally with the
+  ;; same capability probe the new mechanism performs — does the grammar
+  ;; accept the query in question — via the long-stable public
+  ;; `treesit-query-compile'.  Probed against `templ' (not `go'): that's the
+  ;; actual :language these two font-lock rules run under.
+  (unless (fboundp 'go-ts-mode--iota-query-supported-p)
+    (defun go-ts-mode--iota-query-supported-p ()
+      (ignore-errors
+        (treesit-query-compile 'templ '((iota) @font-lock-constant-face) t))))
+  (unless (fboundp 'go-ts-mode--method-elem-supported-p)
+    (defun go-ts-mode--method-elem-supported-p ()
+      (ignore-errors
+        (treesit-query-compile
+         'templ '((method_elem name: (field_identifier) @font-lock-function-name-face))
+         t))))
+  ;; Emacs 31 also turned two js.el internals from precomputed *variables*
+  ;; into on-demand *functions* of the same name (`js--treesit-indent-rules',
+  ;; `js--treesit-font-lock-settings' — both now `(defun ... () ...)').
+  ;; templ-ts-mode.el references both as bare variables to borrow JS's rules
+  ;; for <script> blocks: `(car js--treesit-indent-rules)' at load time (the
+  ;; second startup error, after the two predicates above), and
+  ;; `js-compiled js--treesit-font-lock-settings' inside `templ-ts--setup'
+  ;; (only hits when a .templ file is actually opened — not yet seen, but
+  ;; would be the third).  Function and variable cells are independent in
+  ;; Elisp, so re-establishing a variable binding alongside the existing
+  ;; function doesn't shadow anything js-ts-mode itself does by calling
+  ;; these — `require' first since these have no autoload cookie of their
+  ;; own to pull js.el in on demand.
+  (require 'js)
+  (unless (boundp 'js--treesit-indent-rules)
+    (defvar js--treesit-indent-rules (js--treesit-indent-rules)))
+  (unless (boundp 'js--treesit-font-lock-settings)
+    (defvar js--treesit-font-lock-settings (js--treesit-font-lock-settings)))
+  :config
+  ;; Emacs 31 added a "primary parser" concept for multi-language buffers:
+  ;; `treesit-major-mode-setup' now guesses one (`treesit--guess-primary-parser')
+  ;; whenever the mode hasn't already set `treesit-primary-parser' itself —
+  ;; and that guess assumes the FIRST entry in `treesit-range-settings' is a
+  ;; query it can call `treesit-query-language' on.  templ-ts-mode's sole
+  ;; range rule (`templ-ts--range-rules') is function-based (an explicitly
+  ;; documented, still-supported `treesit-range-rules' form — see its own
+  ;; docstring), so the guess crashes instead: "Wrong type argument:
+  ;; treesit-compiled-query-p, templ-ts--treesit-update-ranges" the moment a
+  ;; `.templ' file is opened.  `treesit-major-mode-setup''s own docstring
+  ;; says exactly what to do here — "multi-lang major mode's author
+  ;; should've ... set the primary parser themselves" — so pre-empt the
+  ;; guess with `:before' advice on `templ-ts--setup', which is called right
+  ;; before `treesit-major-mode-setup' and already creates this exact
+  ;; parser two lines later (`treesit-parser-create' is idempotent per
+  ;; buffer+language, so calling it a line earlier here is harmless).
+  (advice-add 'templ-ts--setup :before
+              (lambda ()
+                (setq-local treesit-primary-parser (treesit-parser-create 'templ)))))
 
 ;;;; GLSL.
 (use-package glsl-mode)
@@ -2623,6 +2690,30 @@ via `gptel-add-file', so it is sent as media on the next `gptel-send'."
 ;; missing function, `M-x straight-pull-package RET gptel'.  Keep the backend on
 ;; a tool-capable model (Claude/OpenAI/OpenRouter) — Perplexity has no tool use.
 ;; Note: agent mode is materially more token-hungry than plain gptel.
+(defun cm/file-looks-binary-p (filename)
+  "Heuristic: FILENAME is binary if its first 8KB contain a NUL byte.
+Same test git/diffutils use to decide \"Binary files differ\" — a NUL is
+essentially never present in real text but appears within the first few
+bytes of most binary formats (e.g. PNG's signature)."
+  (and (file-readable-p filename)
+       (not (file-directory-p filename))
+       (with-temp-buffer
+         (set-buffer-multibyte nil)
+         (insert-file-contents-literally filename nil 0 8192)
+         (goto-char (point-min))
+         (search-forward "\0" nil t))))
+
+(defun cm/gptel-agent--refuse-binary-files (orig-fn filename &rest args)
+  "Signal a clean tool error instead of returning binary garbage.
+`gptel-agent--read-file-lines' has no binary-file guard: pointed at an
+image or other binary file, it happily returns raw decoded bytes, which
+later blow up several calls downstream in `json-serialize' with an
+opaque `(wrong-type-argument json-value-p ...)' instead of a legible
+tool error the model (and the FSM) can actually handle."
+  (if (cm/file-looks-binary-p filename)
+      (error "Error: %s looks like a binary file; the Read tool only supports text files" filename)
+    (apply orig-fn filename args)))
+
 (use-package gptel-agent
   :straight t
   :after gptel
@@ -2630,6 +2721,8 @@ via `gptel-add-file', so it is sent as media on the next `gptel-send'."
   (setq gptel-confirm-tool-calls nil)   ; full autonomy; git is the undo net
   :config
   (gptel-agent-update)                  ; load agent specs, register presets/tools
+  (advice-add 'gptel-agent--read-file-lines :around
+              #'cm/gptel-agent--refuse-binary-files)
   (define-key cm/gptel-map (kbd "A") #'gptel-agent))  ; C-c g A → agent session
 
 (defun cm/gptel-plan ()

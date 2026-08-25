@@ -460,6 +460,11 @@ by the AI Writing Assistant protocol above):
 - `C-c g s` — `gptel-send`
 - `C-c g r` — `gptel-rewrite` (region refactor/rewrite with diff preview)
 - `C-c g a` — `gptel-add` (add region/buffer/file to context)
+- `C-c g p` — `yank-media` (paste a clipboard image into the chat buffer; on
+  Emacs 29+ a buffer-local `yank-media-handler` writes the image to a temp
+  file, inserts a markdown image link, and adds it to context via
+  `gptel-add-file` so it's sent as media on the next `gptel-send` — modeled on
+  ghostel.el's `ghostel--yank-media-data` trick for terminal buffers)
 - `C-c g m` — `gptel-menu` (transient: switch backend/model, params, presets)
 - `C-c g A` — `gptel-agent` (start an agentic session in the current project — see below)
 - `C-c g P` — `cm/gptel-plan` (read-only planning session; header-line button toggles to the full agent)

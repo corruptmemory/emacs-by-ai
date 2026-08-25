@@ -2574,6 +2574,35 @@ Call this interactively with \\[cm/ai-show-suggestions] or remotely via:
 (define-key cm/gptel-map (kbd "a") #'gptel-add)
 (define-key cm/gptel-map (kbd "m") #'gptel-menu)
 
+;;;; gptel clipboard image paste — `C-c g p' / `M-x yank-media'.
+;; Emacs has no built-in "paste image from clipboard" for chat buffers (unlike
+;; e.g. Claude Code's terminal UI); `yank-media' (Emacs 29+) is the generic
+;; mechanism but requires each major mode to register a handler for the MIME
+;; types it accepts. Modeled directly on `ghostel--yank-media-data'
+;; (ghostel.el), which does the same trick for terminal buffers: write the
+;; clipboard image bytes to a temp file, then hand the file off — there, to
+;; the shell via bracketed paste; here, to `gptel-add-file' so it's sent as
+;; media on the next `gptel-send'. Registered buffer-locally via
+;; `gptel-mode-hook' so this only fires in gptel chat buffers, not every
+;; markdown-mode buffer.
+(defun cm/gptel--yank-media (mimetype data)
+  "Write clipboard image DATA of MIMETYPE to a temp file and attach it.
+Inserts a markdown image link at point and adds the file to `gptel-context'
+via `gptel-add-file', so it is sent as media on the next `gptel-send'."
+  (let* ((subtype (cadr (split-string (symbol-name mimetype) "/")))
+         (ext (pcase subtype ("svg+xml" "svg") (_ (or subtype "png"))))
+         (coding-system-for-write 'binary)
+         (temp (make-temp-file "gptel-clipboard-" nil (concat "." ext) data)))
+    (insert (format "![clipboard image](%s)\n" temp))
+    (gptel-add-file temp)
+    (message "Pasted clipboard image → %s (added to gptel context)" temp)))
+
+(when (fboundp 'yank-media-handler)   ; Emacs 29+
+  (add-hook 'gptel-mode-hook
+            (lambda ()
+              (yank-media-handler '("image/.*") #'cm/gptel--yank-media))))
+(define-key cm/gptel-map (kbd "p") #'yank-media)  ; C-c g p → paste clipboard image
+
 ;;;; gptel-magit — commit-message drafting from the staged diff.
 ;; Own binding, gptel-magit's own convention, not part of cm/gptel-map:
 ;; M-g in a git-commit buffer drafts from the diff; `d' then `x' on a magit
@@ -2648,6 +2677,7 @@ action rather than edit.  Switch to the full agent mid-session with the
 ;;   C-c g s  gptel-send
 ;;   C-c g r  gptel-rewrite
 ;;   C-c g a  gptel-add (add region/buffer to context)
+;;   C-c g p  yank-media (paste clipboard image into chat, auto-added to context)
 ;;   C-c g m  gptel-menu (transient: backend/model/params)
 ;;   C-c g A  gptel-agent (start an agentic session in this project)
 ;;   C-c g P  cm/gptel-plan (read-only planning session; toggle to agent in header)

@@ -74,6 +74,47 @@ Confirm with `M-: (memq 'markdown-table-face mixed-pitch-fixed-pitch-faces)`. If
 
 **Startup font-lock race (`cm/refontify-user-buffers`).** `fontaine-set-preset` in fontaine's `:config` calls `set-face-attribute` on `default`, which cascades face-spec recomputation across every face inheriting from default — i.e. all `font-lock-*-face`s. If that cascade lands *after* the initial display pass on already-visible buffers (most reliably `*scratch*`), they render with no font-lock applied until the first redisplay catches up. Symptom: ~1-in-5 starts show un-fontified `*scratch*` (and occasionally other startup-visible buffers) until you press any key. Workaround: `cm/refontify-user-buffers` runs `font-lock-flush` + `font-lock-ensure` on every user buffer with `font-lock-mode` on, hooked into `after-init-hook`. Internal buffers (leading-space names) are skipped to avoid touching daemon/server bookkeeping. If the symptom returns despite the workaround, suspect an additional face-attribute setter that runs *after* `after-init-hook` (e.g. a hook on `window-setup-hook`) and move the re-fontify there instead.
 
+## Multiple-cursors fake cursors
+
+The `multiple-cursors` block (`init.el`) customizes how **fake cursors** render,
+because mc's defaults are unusable with our bar cursor (`cursor-type '(bar . 3)`,
+early-init.el). Three stacked problems, each fixed locally (no package edits):
+
+1. **Invisible.** With a bar cursor, mc draws each fake cursor as a `"|"` glyph in
+   `mc/cursor-bar-face`, whose upstream default `:height 1` is an **absolute
+   0.1pt** — a sliver you can't see.
+2. **The fix never fired (load-order gotcha — the important one).** mc's
+   autoloaded commands (`mc/mark-next-like-this` …) `require`
+   **`multiple-cursors-core`** — where the faces and overlay builders live — but
+   **not** the `multiple-cursors` *umbrella* feature, and nothing else loads the
+   umbrella in normal use. So anything hung off `use-package`'s `:config` (which
+   runs via `with-eval-after-load 'multiple-cursors`) **silently never runs**.
+   Fix: register off **`multiple-cursors-core`** instead. This generalizes — for
+   a multi-file package, the umbrella feature named after the package may never
+   load; advise/hook the sub-feature the commands actually pull in. (Confirmed by
+   reproduction: triggering a command loads `-core` while `(featurep
+   'multiple-cursors)` stays nil.)
+3. **Full-width `"|"`.** Even fixed, the `"|"` is an overlay `before-string` —
+   inserted content that eats a whole character column and shoves the line's text
+   right (the real cursor doesn't, because the display engine paints it *over* the
+   glyph). Fix: **replace** the bar `before-string` with a thin **pixel-width**
+   bar — a space carrying `:background` + `display (space :width (N))` in PIXELS.
+
+**Mechanism.** `cm/mc--thin-bar-overlay` is `:filter-return` advice on
+`mc/make-cursor-overlay-inline` / `-at-eol`; it detects mc's bar overlay (its
+`before-string`'s first char has face `mc/cursor-bar-face`) and swaps in
+`cm/mc--bar-string` — `cm/mc-cursor-bar-width` px wide (default 3, matching the
+real bar), colored `cm/mc-cursor-darken-factor`× the **live** `cursor` color via
+`cm/color-darken` (recomputed per overlay, so it tracks the theme — magenta on
+modus-vivendi-tinted, cream on dracula-pro-blade). Tuning knobs:
+`cm/mc-cursor-bar-width` (px) and `cm/mc-cursor-darken-factor` (0.85 = 15%
+darker, so point stays the primary cursor). `cm/color-darken` parses `#RRGGBB`
+directly (display-independent — the batch color builtins are unreliable without a
+display) and falls back to `color-values` for named colors. Text shifts by only
+those few px, not a full column; the ~3px residual is inherent (an overlay
+before-string always advances the display — the perfect zero-shift only the
+native cursor gets).
+
 ## Custom LSP Servers
 
 Non-default eglot server entries are configured for: Odin (`ols`), Zig (`zls`), go-templ (`templ lsp`), GLSL (`glslls`), Fish (`fish-lsp`), Haskell (`haskell-language-server-wrapper`), Ruby/Rails (`ruby-lsp` — Shopify's server; see "Ruby / Rails" below), Harper (`harper-ls` — grammar/spell checking for org/markdown/text modes).

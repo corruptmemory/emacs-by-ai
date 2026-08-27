@@ -799,6 +799,44 @@ Seeding is skipped for multi-line or very large regions."
   (add-to-list 'corfu-margin-formatters #'kind-icon-margin-formatter))
 
 ;;;; Multiple-cursors.
+;; When the real cursor is a bar (ours is `(bar . 3)'), mc draws each fake cursor
+;; as a "|" glyph in `mc/cursor-bar-face' — whose upstream default `:height 1' is
+;; an ABSOLUTE 0.1pt, so the fake bars render as an invisible sliver.
+;; `cm/mc-refresh-cursor-faces' fixes that: it draws them at normal height in a
+;; shade derived from the LIVE `cursor' color (so it tracks the current theme —
+;; magenta under modus-vivendi-tinted, cream under dracula-pro-blade), a touch
+;; darker so point stays the primary cursor.  Re-run on `load-theme' to follow
+;; theme switches (same derived-face-refresh pattern as the heading-scale block).
+(defvar cm/mc-cursor-darken-factor 0.85
+  "Multiplier toward black for the multiple-cursors fake-cursor bars.
+Applied to the live `cursor' color: 1.0 = same as point, lower = darker.")
+
+(defun cm/color-darken (color factor)
+  "Return COLOR scaled toward black by FACTOR (0.0-1.0) as a \"#RRGGBB\" string.
+COLOR may be a \"#RRGGBB\" hex string (parsed directly — display-independent) or
+a color name (resolved via `color-values')."
+  (let ((rgb (if (string-match-p "\\`#[0-9a-fA-F]\\{6\\}\\'" color)
+                 (list (string-to-number (substring color 1 3) 16)
+                       (string-to-number (substring color 3 5) 16)
+                       (string-to-number (substring color 5 7) 16))
+               (mapcar (lambda (v) (/ v 256)) (color-values color)))))
+    (apply #'format "#%02x%02x%02x"
+           (mapcar (lambda (c) (min 255 (max 0 (round (* c factor))))) rgb))))
+
+(defun cm/mc-refresh-cursor-faces (&rest _)
+  "Make multiple-cursors fake bar-cursors visible and slightly darker than point.
+Overrides `mc/cursor-bar-face' (whose `:height 1' default renders as an invisible
+0.1pt sliver) so the fake \"|\" bars draw at normal height, foreground set to
+`cm/mc-cursor-darken-factor' times the live `cursor' color.  A no-op until mc has
+defined the face, and idempotent, so it also serves as `load-theme' advice."
+  (when (facep 'mc/cursor-bar-face)
+    (let ((cur (face-attribute 'cursor :background nil t)))
+      (when (stringp cur)
+        (set-face-attribute 'mc/cursor-bar-face nil
+                            :height 'unspecified    ; undo mc's 0.1pt `:height 1'
+                            :background 'unspecified ; thin bar, not a filled block
+                            :foreground (cm/color-darken cur cm/mc-cursor-darken-factor))))))
+
 (use-package multiple-cursors
   :custom
   (mc/always-run-for-all t)
@@ -810,7 +848,10 @@ Seeding is skipped for multi-line or very large regions."
    ("C-M->"       . mc/mark-next-like-this-symbol)
    ("C-M-<"       . mc/mark-previous-like-this-symbol)
    ("C-\""        . mc/skip-to-next-like-this)
-   ("C-:"         . mc/skip-to-previous-like-this)))
+   ("C-:"         . mc/skip-to-previous-like-this))
+  :config
+  (cm/mc-refresh-cursor-faces)
+  (advice-add 'load-theme :after #'cm/mc-refresh-cursor-faces))
 
 ;;;; expand-region — semantic region expansion/shrinking.
 (use-package expand-region

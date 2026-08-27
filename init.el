@@ -799,23 +799,35 @@ Seeding is skipped for multi-line or very large regions."
   (add-to-list 'corfu-margin-formatters #'kind-icon-margin-formatter))
 
 ;;;; Multiple-cursors.
-;; Two things conspire to make mc's fake cursors invisible; both fixed below.
-;;  1. FACE: when the real cursor is a bar (ours is `(bar . 3)'), mc draws each
-;;     fake cursor as a "|" glyph in `mc/cursor-bar-face', whose upstream default
-;;     `:height 1' is an ABSOLUTE 0.1pt — a sliver.  `cm/mc-refresh-cursor-faces'
-;;     redraws them at normal height in a shade derived from the LIVE `cursor'
-;;     color (so it tracks the theme — magenta under modus-vivendi-tinted, cream
-;;     under dracula-pro-blade), a touch darker so point stays the primary cursor.
-;;  2. LOAD ORDER (the real gotcha): mc's autoloaded commands
-;;     (`mc/mark-next-like-this' …) `require' `multiple-cursors-CORE' — where the
-;;     faces are defined — but NOT the `multiple-cursors' umbrella feature, which
-;;     nothing loads in normal use.  So hanging the refresh off `use-package's
-;;     `:config' (which waits on the umbrella) silently NEVER fires, leaving the
-;;     face at its invisible default.  Trigger it off `multiple-cursors-core'
-;;     with `with-eval-after-load' instead, and re-run on `load-theme'.
+;; Fake cursors have two problems by default; both are fixed below without
+;; touching the package source.
+;;  1. INVISIBLE: when the real cursor is a bar (ours is `(bar . 3)'), mc draws
+;;     each fake cursor as a "|" GLYPH in `mc/cursor-bar-face', whose upstream
+;;     default `:height 1' is an ABSOLUTE 0.1pt — a sliver you can't see.
+;;  2. FULL-WIDTH: even with the face fixed, that "|" is inserted content (an
+;;     overlay `before-string'), so it eats a whole character column and shoves
+;;     the line's text right — unlike the real cursor, which the display engine
+;;     paints OVER the glyph without moving anything.
+;; So rather than fix the face, REPLACE mc's bar `before-string' with a thin
+;; PIXEL-width vertical bar — a space carrying `:background' plus a
+;; `display (space :width (N))' PIXEL spec, `cm/mc-cursor-bar-width' px wide
+;; (matching the real bar's 3px), colored `cm/mc-cursor-darken-factor'x the LIVE
+;; `cursor' color (so it tracks the theme — magenta on modus-vivendi-tinted,
+;; cream on dracula-pro-blade).  Text then shifts by only those few px, not a
+;; full column.
+;;
+;; LOAD ORDER (the gotcha that bit an earlier attempt): mc's autoloaded commands
+;; (`mc/mark-next-like-this' …) `require' `multiple-cursors-CORE' — where the
+;; overlay builders live — but NOT the `multiple-cursors' umbrella feature, which
+;; nothing loads in normal use.  So a `use-package' `:config' (waiting on the
+;; umbrella) never fires; advise off `multiple-cursors-core' instead.
 (defvar cm/mc-cursor-darken-factor 0.85
   "Multiplier toward black for the multiple-cursors fake-cursor bars.
 Applied to the live `cursor' color: 1.0 = same as point, lower = darker.")
+
+(defvar cm/mc-cursor-bar-width 3
+  "Width in PIXELS of the multiple-cursors fake-cursor bar.
+Match the real cursor's bar width (`cursor-type' `(bar . N)').")
 
 (defun cm/color-darken (color factor)
   "Return COLOR scaled toward black by FACTOR (0.0-1.0) as a \"#RRGGBB\" string.
@@ -829,28 +841,35 @@ a color name (resolved via `color-values')."
     (apply #'format "#%02x%02x%02x"
            (mapcar (lambda (c) (min 255 (max 0 (round (* c factor))))) rgb))))
 
-(defun cm/mc-refresh-cursor-faces (&rest _)
-  "Make multiple-cursors fake bar-cursors visible and slightly darker than point.
-Overrides `mc/cursor-bar-face' (whose `:height 1' default renders as an invisible
-0.1pt sliver) so the fake \"|\" bars draw at normal height, foreground set to
-`cm/mc-cursor-darken-factor' times the live `cursor' color.  A no-op until mc has
-defined the face, and idempotent, so it also serves as `load-theme' advice."
-  (when (facep 'mc/cursor-bar-face)
-    (let ((cur (face-attribute 'cursor :background nil t)))
-      (when (stringp cur)
-        (set-face-attribute 'mc/cursor-bar-face nil
-                            :height 'unspecified    ; undo mc's 0.1pt `:height 1'
-                            :background 'unspecified ; thin bar, not a filled block
-                            :foreground (cm/color-darken cur cm/mc-cursor-darken-factor))))))
+(defun cm/mc--bar-string ()
+  "Return a thin vertical bar string for a fake cursor.
+`cm/mc-cursor-bar-width' px wide, colored `cm/mc-cursor-darken-factor'x the live
+`cursor' color.  Recomputed per overlay, so it tracks the current theme."
+  (let* ((cur (face-attribute 'cursor :background nil t))
+         (color (if (stringp cur)
+                    (cm/color-darken cur cm/mc-cursor-darken-factor)
+                  cur)))
+    (propertize " "
+                'face (list :background color)
+                'display (list 'space :width (list cm/mc-cursor-bar-width)))))
 
-;; Apply the fix off `multiple-cursors-core' (the feature mc actually loads, per
-;; the load-order note above) rather than the never-loaded umbrella `:config'.
-;; The `load-theme' advice is registered at top level so theme switches are
-;; tracked regardless of whether/when mc has loaded (the refresh is a guarded
-;; no-op until the face exists).
+(defun cm/mc--thin-bar-overlay (overlay)
+  "Rewrite a bar-style fake-cursor OVERLAY to a thin pixel bar, not a full column.
+For `:filter-return' advice on mc's overlay builders: only touches overlays whose
+`before-string' is mc's \"|\" tagged with `mc/cursor-bar-face', leaving the
+non-bar (block / end-of-line) style untouched."
+  (when (overlayp overlay)
+    (let ((bs (overlay-get overlay 'before-string)))
+      (when (and (stringp bs)
+                 (eq (get-text-property 0 'face bs) 'mc/cursor-bar-face))
+        (overlay-put overlay 'before-string (cm/mc--bar-string)))))
+  overlay)
+
+;; Advise off `multiple-cursors-core' (the feature mc actually loads — the
+;; umbrella never does).  Both builders share the same "|"-detection filter.
 (with-eval-after-load 'multiple-cursors-core
-  (cm/mc-refresh-cursor-faces))
-(advice-add 'load-theme :after #'cm/mc-refresh-cursor-faces)
+  (advice-add 'mc/make-cursor-overlay-inline :filter-return #'cm/mc--thin-bar-overlay)
+  (advice-add 'mc/make-cursor-overlay-at-eol :filter-return #'cm/mc--thin-bar-overlay))
 
 (use-package multiple-cursors
   :custom

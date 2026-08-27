@@ -799,14 +799,20 @@ Seeding is skipped for multi-line or very large regions."
   (add-to-list 'corfu-margin-formatters #'kind-icon-margin-formatter))
 
 ;;;; Multiple-cursors.
-;; When the real cursor is a bar (ours is `(bar . 3)'), mc draws each fake cursor
-;; as a "|" glyph in `mc/cursor-bar-face' — whose upstream default `:height 1' is
-;; an ABSOLUTE 0.1pt, so the fake bars render as an invisible sliver.
-;; `cm/mc-refresh-cursor-faces' fixes that: it draws them at normal height in a
-;; shade derived from the LIVE `cursor' color (so it tracks the current theme —
-;; magenta under modus-vivendi-tinted, cream under dracula-pro-blade), a touch
-;; darker so point stays the primary cursor.  Re-run on `load-theme' to follow
-;; theme switches (same derived-face-refresh pattern as the heading-scale block).
+;; Two things conspire to make mc's fake cursors invisible; both fixed below.
+;;  1. FACE: when the real cursor is a bar (ours is `(bar . 3)'), mc draws each
+;;     fake cursor as a "|" glyph in `mc/cursor-bar-face', whose upstream default
+;;     `:height 1' is an ABSOLUTE 0.1pt — a sliver.  `cm/mc-refresh-cursor-faces'
+;;     redraws them at normal height in a shade derived from the LIVE `cursor'
+;;     color (so it tracks the theme — magenta under modus-vivendi-tinted, cream
+;;     under dracula-pro-blade), a touch darker so point stays the primary cursor.
+;;  2. LOAD ORDER (the real gotcha): mc's autoloaded commands
+;;     (`mc/mark-next-like-this' …) `require' `multiple-cursors-CORE' — where the
+;;     faces are defined — but NOT the `multiple-cursors' umbrella feature, which
+;;     nothing loads in normal use.  So hanging the refresh off `use-package's
+;;     `:config' (which waits on the umbrella) silently NEVER fires, leaving the
+;;     face at its invisible default.  Trigger it off `multiple-cursors-core'
+;;     with `with-eval-after-load' instead, and re-run on `load-theme'.
 (defvar cm/mc-cursor-darken-factor 0.85
   "Multiplier toward black for the multiple-cursors fake-cursor bars.
 Applied to the live `cursor' color: 1.0 = same as point, lower = darker.")
@@ -837,6 +843,15 @@ defined the face, and idempotent, so it also serves as `load-theme' advice."
                             :background 'unspecified ; thin bar, not a filled block
                             :foreground (cm/color-darken cur cm/mc-cursor-darken-factor))))))
 
+;; Apply the fix off `multiple-cursors-core' (the feature mc actually loads, per
+;; the load-order note above) rather than the never-loaded umbrella `:config'.
+;; The `load-theme' advice is registered at top level so theme switches are
+;; tracked regardless of whether/when mc has loaded (the refresh is a guarded
+;; no-op until the face exists).
+(with-eval-after-load 'multiple-cursors-core
+  (cm/mc-refresh-cursor-faces))
+(advice-add 'load-theme :after #'cm/mc-refresh-cursor-faces)
+
 (use-package multiple-cursors
   :custom
   (mc/always-run-for-all t)
@@ -848,10 +863,7 @@ defined the face, and idempotent, so it also serves as `load-theme' advice."
    ("C-M->"       . mc/mark-next-like-this-symbol)
    ("C-M-<"       . mc/mark-previous-like-this-symbol)
    ("C-\""        . mc/skip-to-next-like-this)
-   ("C-:"         . mc/skip-to-previous-like-this))
-  :config
-  (cm/mc-refresh-cursor-faces)
-  (advice-add 'load-theme :after #'cm/mc-refresh-cursor-faces))
+   ("C-:"         . mc/skip-to-previous-like-this)))
 
 ;;;; expand-region — semantic region expansion/shrinking.
 (use-package expand-region

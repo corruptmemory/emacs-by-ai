@@ -2830,6 +2830,35 @@ action rather than edit.  Switch to the full agent mid-session with the
                'gptel-plan))
 (define-key cm/gptel-map (kbd "P") #'cm/gptel-plan)  ; C-c g P → planning session
 
+;;;; macher — project-aware, review-before-apply multi-file editing for gptel.
+;; Complements gptel-agent rather than replacing it: gptel-agent edits files
+;; directly on disk (autonomous; git is the undo net), while macher edits an
+;; in-memory copy-on-write workspace and emits a unified DIFF into a patch buffer
+;; that you review and apply with `C-c C-a' (`diff-apply-buffer').  So our
+;; `gptel-confirm-tool-calls' nil does NOT undermine it — macher's gate is at
+;; patch-APPLY, not the (in-memory, disk-untouching) tool calls.  Opt-in: plain
+;; `C-c g' chat is unchanged; drive it via the action commands below or an
+;; `@macher' / `@macher-ro' preset token in any prompt.
+;;   - `macher-install' registers macher's presets (`@macher' full edit,
+;;     `@macher-ro' read-only, `@macher-tools', `@macher-system'…) and tools with
+;;     gptel; `macher-enable' lets them work in any gptel buffer.  Both are
+;;     documented as unintrusive — no effect on non-macher requests, so
+;;     gptel-agent sessions are unaffected.
+;;   - Workspace is the `project-current' project by default; all file ops are
+;;     confined to it.
+;;   - Backend must be tool-capable (Claude/OpenAI/OpenRouter — not Perplexity),
+;;     the same constraint as gptel-agent.
+(use-package macher
+  :after gptel
+  :custom
+  (macher-action-buffer-ui 'org)   ; structured, foldable action buffers
+  :config
+  (macher-install)                 ; register @macher/@macher-ro/… presets + tools
+  (macher-enable)                  ; enable macher tools/context in any gptel buffer
+  (define-key cm/gptel-map (kbd "i") #'macher-implement)  ; C-c g i → implement (from selection/input)
+  (define-key cm/gptel-map (kbd "R") #'macher-revise)     ; C-c g R → revise the current patch
+  (define-key cm/gptel-map (kbd "d") #'macher-discuss))   ; C-c g d → discuss workspace (read-only)
+
 ;;;; Keybinding cheat sheet (high-frequency).
 ;; Search/navigation:
 ;;   C-S-s   consult-line (region-seeded)
@@ -2866,6 +2895,9 @@ action rather than edit.  Switch to the full agent mid-session with the
 ;;   C-c g m  gptel-menu (transient: backend/model/params)
 ;;   C-c g A  gptel-agent (start an agentic session in this project)
 ;;   C-c g P  cm/gptel-plan (read-only planning session; toggle to agent in header)
+;;   C-c g i  macher-implement (review-before-apply edit; @macher, patch buffer)
+;;   C-c g R  macher-revise (revise the current macher patch)
+;;   C-c g d  macher-discuss (ask about the workspace, read-only; @macher-ro)
 ;;   M-g      (in git-commit buffer) draft commit message via gptel-magit
 ;;
 ;; AI writing assistant (remote — Claude Code calls via emacsclient -e):

@@ -51,7 +51,7 @@ gptel *presets* / tools (so they compose, they don't compete):
 |---|---|---|
 | `gptel-make-tool` (gptel core) | The primitive: `:name :function :description :args :category :confirm :include :async`. gptel runs a real multi-step tool loop (feeds results back, model keeps calling). | Foundation everything is built on. |
 | **`gptel-agent`** (karthink, MELPA) — *first-party* | Ready preset: web (search/fetch), local files read/write/edit, Bash, Emacs state (docs + Elisp eval), plus `executor`/`researcher`/`introspector` sub-agents that don't share context. | **Chosen spine.** |
-| `macher` (kmontag, MELPA) | Project-aware multi-file editing on gptel; edits stay in an in-memory struct and emit a **unified diff into a review buffer** — apply-before-write. Presets `@macher` / `@macher-ro`. | Deferred (additive). The "safe review-first editing" path, matching the existing `cm/ai-*` diff-accept taste. |
+| `macher` (kmontag, MELPA) | Project-aware multi-file editing on gptel; edits stay in an in-memory struct and emit a **unified diff into a review buffer** — apply-before-write. Presets `@macher` / `@macher-ro`. | **Shipped 2026-08-27** (was deferred to Emacs 31). The "safe review-first editing" path, matching the existing `cm/ai-*` diff-accept taste; complements the `gptel-agent` spine. |
 | `mcp.el` + `llm-tool-collection` | Bridge MCP servers (filesystem/git/shell/fetch) into gptel; curated ready-made file/buffer/shell tools. | Deferred (additive). Future **open-brain** MCP bridge lives here. |
 
 **Why `gptel-agent` for the spine:** first-party (moves with gptel), curated and
@@ -89,7 +89,8 @@ session), which the design relies on:
 
 1. **Spine = `gptel-agent`.** `macher`, `mcp.el`/open-brain bridge, and custom
    sub-agents are **deferred** — all additive, all coexist as presets/tools, none
-   blocks this pass.
+   blocks this pass. (`macher` subsequently shipped 2026-08-27 once on Emacs 31 —
+   see "Out of scope" below.)
 2. **Full autonomy via `(setq gptel-confirm-tool-calls nil)`** — the
    README-sanctioned, drift-proof lever. We do **not** fork `gptel-agent.md`.
    *Alternative on record:* if plain-chat tool use should still confirm later,
@@ -201,13 +202,17 @@ No ERT suite: this is configuration with no pure logic of our own to test
 
 ## Out of scope
 
-- `macher` (review-before-apply multi-file editing) — deferred **until after
-  Emacs 31 lands** (user decision, 2026-08-24). Rationale: macher's patch-apply
-  step leans on `diff-apply-buffer`, which Emacs 30.x mishandles for patches that
-  create or delete files (macher FAQ / macher#45); the fix ships in Emacs 31. So
-  macher is worth adding precisely when this config moves to 31 — a natural item
-  for `docs/emacs-31-migration.md`. Additive and coexists with `gptel-agent` when
-  it lands (`@macher` vs `@gptel-agent`, chosen per-task).
+- `macher` (review-before-apply multi-file editing) — was deferred until after
+  Emacs 31 (macher's patch-apply leans on `diff-apply-buffer`, which Emacs 30.x
+  mishandled for create/delete patches; fixed in 31). **SHIPPED 2026-08-27** as a
+  bounded follow-up once this config moved to 31.1: its own `use-package` block
+  after gptel-agent, `(macher-install)` + `(macher-enable)`, `macher-action-buffer-ui
+  org`, and `C-c g i`/`R`/`d` → `macher-implement`/`revise`/`discuss`. Coexists
+  with `gptel-agent` as designed (`@macher` review-before-apply vs `@gptel-agent`
+  autonomous; the confirm-tool-calls nil posture doesn't undermine macher, whose
+  gate is at patch-apply). Gate verified on 31.1 (a `new file` git patch applies
+  and creates the file); macher itself declares `emacs "30.1"`. See the "macher"
+  subsection in CLAUDE.md's gptel docs.
 - `mcp.el` bridging / the **open-brain** MCP tool category — deferred, additive.
 - Custom sub-agents mirroring `.claude/agents` — deferred; the built-in
   `executor`/`researcher`/`introspector` are enough for v1.

@@ -555,6 +555,9 @@ by the AI Writing Assistant protocol above):
 - `C-c g m` — `gptel-menu` (transient: switch backend/model, params, presets)
 - `C-c g A` — `gptel-agent` (start an agentic session in the current project — see below)
 - `C-c g P` — `cm/gptel-plan` (read-only planning session; header-line button toggles to the full agent)
+- `C-c g i` — `macher-implement` (review-before-apply edit from selection/input; `@macher`, patch buffer — see the macher section below)
+- `C-c g R` — `macher-revise` (revise the current macher patch)
+- `C-c g d` — `macher-discuss` (ask about the workspace, read-only; `@macher-ro`)
 
 **gptel-magit** (separate package, `:hook (magit-mode . gptel-magit-install)`
 so it loads lazily): `M-g` in a `git-commit` buffer drafts a commit message
@@ -624,13 +627,42 @@ file-on-disk CLI can't see.
 
 Design + plan: `docs/plans/2026-08-24-agentic-gptel-{design,plan}.md`.
 
+### macher — review-before-apply multi-file editing (shipped 2026-08-27)
+
+`macher` (kmontag, MELPA) is a **second** agentic path for gptel, wired in its
+own `use-package` block right after gptel-agent. It **complements** gptel-agent
+rather than replacing it — two deliberately different postures:
+
+- **gptel-agent** (`C-c g A`) edits files directly on disk, autonomously (git is
+  the undo net).
+- **macher** (`C-c g i`) edits an **in-memory copy-on-write workspace** and emits
+  a unified **diff into a patch buffer** you review and apply with `C-c C-a`
+  (`diff-apply-buffer`). So our `gptel-confirm-tool-calls' nil full-autonomy does
+  NOT undermine macher: its gate is at patch-**apply**, not the (disk-untouching,
+  in-memory) tool calls.
+
+Both are opt-in; plain `C-c g` chat is unchanged. The block runs `(macher-install)`
+(registers the `@macher` / `@macher-ro` / `@macher-tools` / `@macher-system…`
+presets + tools with gptel) and `(macher-enable)` (lets them work in any gptel
+buffer) — both documented as unintrusive, no effect on non-macher requests, so
+gptel-agent is unaffected. `macher-action-buffer-ui` is `org` (foldable action
+buffers). Workspace = the `project-current` project. Actions: `C-c g i`
+`macher-implement` (from selection/input, `@macher`), `C-c g R` `macher-revise`
+(revise the current patch), `C-c g d` `macher-discuss` (ask about the workspace,
+read-only `@macher-ro`). Backend must be tool-capable (Claude/OpenAI/OpenRouter —
+not Perplexity), same as gptel-agent.
+
+Why it waited for Emacs 31: macher's patch-apply leans on `diff-apply-buffer`,
+whose new/deleted-file handling was broken on Emacs 30.x and fixed in 31 —
+verified on 31.1 (a `new file` git patch applies and creates the file). macher
+itself declares `emacs "30.1"` support (it self-emits git diff headers +
+`diff-fixup-modifs`), so the deferral was conservative; on 31.1 there is no
+blocker.
+
 **Not wired up (deliberately deferred):** MCP bridging (`mcp.el`) and a future
-open-brain MCP tool category; `macher` (review-before-apply multi-file editing)
-**until after Emacs 31 lands** — its `diff-apply-buffer` step mishandles
-new/deleted files on Emacs 30.x, fixed in 31 (cross-ref
-`docs/emacs-31-migration.md`); custom sub-agents mirroring `.claude/agents`;
-auto-enabling `gptel-mode` in any buffer. Tool-calling itself is now wired — via
-`gptel-agent` (above), not raw `gptel-make-tool`.
+open-brain MCP tool category; custom sub-agents mirroring `.claude/agents`;
+auto-enabling `gptel-mode` in any buffer. Tool-calling itself is wired — via
+`gptel-agent` and `macher` (above), not raw `gptel-make-tool`.
 
 **Presets (gptel's own dynamic profile system — not implemented yet):**
 research notes on gptel's presets feature (named bundles of backend/

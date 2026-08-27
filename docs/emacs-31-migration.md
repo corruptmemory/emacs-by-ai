@@ -20,6 +20,16 @@ timeline below is preserved as historical record; Parts 2–4 are now live, not
 speculative — treat their status boxes as the actual migration state, not a
 forecast.
 
+**Update 2026-08-27: the tree-sitter-gated items were ungated.** Two facts
+corrected a stale assumption baked into Parts 2–4 (this ledger was drafted
+2026-08-13 assuming the `0.25.10` pin was still live): **the pin was actually
+removed `2026-05-20`** once Arch's 0.26 rebuild cascade settled, so the machine
+runs `tree-sitter 0.26.9` (not the pinned `0.25.10` this doc repeatedly names),
+and the 0.26 `#match`/`#match?` catch-22 is **fully resolved** on 31.1 —
+verified by font-lock compiling clean across every `:match`-using mode. With
+that gate gone, §2.1 (treesit-auto retirement), §3.1 (go-ts rename), and §3.2
+(grammar auto-install / pin) all shipped — see their boxes.
+
 Original status snapshot, as of 2026-08-13 — Emacs 31 was **in pretest**, not
 yet released. Ground truth from the Emacs git repo and the emacs-devel
 announcements at the time:
@@ -89,7 +99,29 @@ The headline themes of 31 vs the current stable (30.x):
 Ranked by payoff. Confidence reflects how sure the built-in is a full
 replacement.
 
-### 2.1 `treesit-auto` → built-in tree-sitter automation `[ ] open` — **MEDIUM confidence, biggest-ticket**
+### 2.1 `treesit-auto` → built-in tree-sitter automation `[x] done` — **shipped 2026-08-27**
+
+> **RESOLVED.** Retired treesit-auto for the built-in machinery (`init.el` commit
+> `b5529e5`). What the verification actually found, vs. the cautions below:
+> - **Grammar-source coverage is a non-issue.** The built-in ts-modes
+>   *self-register* ~22 grammar sources just by loading (c, cmake, cpp, css,
+>   dockerfile, go/gomod/gowork, html, java, javascript, json, lua, python,
+>   ruby, rust, toml, tsx, typescript, yaml, …). Only 3 languages need a manual
+>   supplement (no loaded mode registers them eagerly): **bash, scala, templ**.
+> - **The pin interaction is moot** — the `0.25.10` pin was already removed
+>   `2026-05-20` (see §0); we're on `tree-sitter 0.26.9` and font-lock compiles
+>   clean across every `:match`-using mode (the old 0.26 catch-22 is gone).
+> - **The remap is *cleaner*:** `treesit-enabled-modes t` uses
+>   `major-mode-remap-alist` (the proper mechanism), so treesit-auto's
+>   `auto-mode-alist` injection — and thus the `cm/sanitize-auto-mode-alist`
+>   scrub — is gone. Built-in modes also self-register graceful
+>   `*-ts-mode-maybe' auto-mode entries, so file→mode resolution needs no help.
+> - **Two contracts:** set via `setopt` (the defcustom `:set` populates the
+>   remap alist; bare `setq` is inert) after `(require 'treesit)`; and
+>   `treesit-auto-install-grammar` takes symbols (`always`/`ask`/`never`), NOT
+>   `t` — use `always` to match the old silent install.
+>
+> Original analysis (kept for context):
 
 - **Current:** `init.el:960–977` — `treesit-auto` with `treesit-auto-install t`,
   `treesit-auto-add-to-auto-mode-alist 'all`, `global-treesit-auto-mode`, plus
@@ -153,14 +185,13 @@ ever want richer layout manipulation. Low priority — keep unless we want more.
 
 Ranked by likely impact on us.
 
-### 3.1 `go-ts-mode-indent-offset` renamed → `go-ts-indent-offset` `[ ] open` — **concrete edit**
+### 3.1 `go-ts-mode-indent-offset` renamed → `go-ts-indent-offset` `[x] done` — **applied 2026-08-27** (commit `b5529e5`)
 
-- **Hit:** `init.el:1267` — `(setq go-ts-mode-indent-offset 4)`. Go is
+- **Hit:** `init.el` — `(setq go-ts-mode-indent-offset 4)`. Go is
   explicitly in the 31 rename list (NEWS.31: the TS modes mistakenly used
   `FOO-mode-indent-offset` instead of the conventional `FOO-indent-offset`).
-- **Impact:** the old name is expected to survive as an obsolete alias (works,
-  emits a deprecation warning). **Action on 31:** change to
-  `(setq go-ts-indent-offset 4)`. Same family, if we ever set them:
+- **Done:** changed to `(setq go-ts-indent-offset 4)`. The old name still works
+  as an obsolete alias, so this was cosmetic. Same family, if we ever set them:
   `c-ts-indent-offset`, `cmake-ts-indent-offset`, `java-ts-indent-offset`,
   `json-ts-indent-offset`, `typescript-ts-indent-offset`, `toml-ts-indent-offset`.
 - **Not affected:** our own `jai-ts-mode-indent-offset` (`jai-ts-mode.el:75`) is
@@ -169,13 +200,21 @@ Ranked by likely impact on us.
   would be consistency-only and is a public-ish option — low value, skip unless
   bored.
 
-### 3.2 Tree-sitter grammar auto-install + the 0.25.10 pin `[ ] open` — **high attention**
+### 3.2 Tree-sitter grammar auto-install + the 0.25.10 pin `[x] done` — **resolved 2026-08-27**
 
-Independent of whether we retire `treesit-auto` (2.1): on 31, first-visit grammar
-installs and any grammar rebuild run against the installed tree-sitter. **Re-run
-the grammar rebuild and re-verify `docs/tree-sitter-026-fix.md` still holds under
-31 before trusting tree-sitter modes.** Treat the 30→31 jump as a checkpoint for
-the whole tree-sitter pin story.
+> **RESOLVED.** The premise here (a live `0.25.10` pin, a 30→31 checkpoint for
+> the pin story) was already stale when written: the pin came off `2026-05-20`.
+> Current stack is `tree-sitter 0.26.9` on 31.1, and the existing Apr-2026
+> grammars load and **font-lock compiles clean** across go/c/cmake/rust/ruby/
+> java/lua/typescript/python/elixir (the `:match` modes the 026 doc flagged) —
+> so the 0.26 catch-22 is gone and **no grammar rebuild was needed**. Grammars
+> now auto-install on demand (`treesit-auto-install-grammar` `always`).
+> `docs/tree-sitter-026-fix.md` is now historical.
+
+Original note (superseded): independent of whether we retire `treesit-auto`
+(2.1), on 31 first-visit grammar installs and any grammar rebuild run against the
+installed tree-sitter; re-verify `docs/tree-sitter-026-fix.md` still holds before
+trusting tree-sitter modes.
 
 ### 3.3 Bundled Org → 9.8 `[ ] open`
 
@@ -339,19 +378,22 @@ clean. Full `./tests/run-tests.sh` (54/54) unaffected.
 
 ## 4. Pre-flight checklist (run when 31 lands)
 
-- [ ] Install Emacs 31 (pretest tarball or `emacs-31` branch build); **keep 30.x
-      available** to fall back.
-- [ ] `rm ~/.config/emacs/tree-sitter/*.so` and rebuild grammars; re-verify
-      `docs/tree-sitter-026-fix.md` still holds under 31 (§3.2).
-- [ ] First launch: inspect `*Warnings*` for deprecation/obsolete messages;
-      triage anything from our own code (expected: none — §3.9).
-- [ ] Apply the `go-ts-mode-indent-offset` → `go-ts-indent-offset` edit (§3.1).
-- [ ] Run `./tests/run-tests.sh` (ERT suites for `cm-project-roots`,
-      `cm-project-tags`, `cm-project-sessions`, `jai-ts-mode`) under 31.
-- [ ] Decide on `treesit-auto` retirement (§2.1) — only after confirming
-      grammar-source coverage and the pin interaction.
+- [x] Install Emacs 31 — landed 2026-08-24 (`GNU Emacs 31.1`).
+- [x] `rm tree-sitter/*.so` + rebuild / re-verify `docs/tree-sitter-026-fix.md`
+      under 31 (§3.2) — **not needed:** existing grammars load and font-lock
+      compiles clean on 0.26.9; the 026 catch-22 is resolved. Grammars now
+      auto-install on demand.
+- [x] First launch: inspect `*Warnings*` — no obsolete/deprecation messages from
+      our own code (§3.9 held).
+- [x] Apply the `go-ts-mode-indent-offset` → `go-ts-indent-offset` edit (§3.1).
+- [x] Run `./tests/run-tests.sh` under 31 — **54/54 pass** (`cm-project-roots`,
+      `cm-project-tags`, `cm-project-sessions`, `jai-ts-mode`).
+- [x] Decide on `treesit-auto` retirement (§2.1) — **retired** (grammar-source
+      coverage confirmed via built-in self-registration; pin interaction moot).
 - [ ] Smoke-test: eglot on a Go/Rust/Python file, magit, org (9.8) rendering,
-      markdown preview, ghostel, the `C-c w`/`C-x p p` project flows.
+      markdown preview, ghostel, the `C-c w`/`C-x p p` project flows. *(Headless
+      grammar/mode/font-lock checks pass; the interactive GUI smoke-test is for
+      the user to run on a live frame.)*
 
 ---
 

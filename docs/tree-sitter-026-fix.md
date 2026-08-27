@@ -4,6 +4,18 @@ description: Emacs 30.2 vs tree-sitter 0.26 ABI incompatibility — predicate na
 type: project
 originSessionId: 60b1edb1-49f2-400b-b26c-0b08b6249242
 ---
+> **⚠ HISTORICAL — RESOLVED (2026-08-27).** This documents a 30.2-era
+> incompatibility that no longer applies. The `0.25.10`/`emacs-wayland` pin
+> below was **removed 2026-05-20** once Arch's 0.26 rebuild cascade settled, and
+> the catch-22 is **fully gone** on the current stack: `Emacs 31.1` +
+> `tree-sitter 0.26.9`, with font-lock compiling clean across every
+> `:match`-using mode (go/c/cmake/rust/ruby/java/lua/typescript/python/elixir).
+> The existing grammars load without a rebuild. Kept as the diagnosis of record:
+> the *method* (check `pacman -Qi tree-sitter`, downgrade + rebuild grammars)
+> is still the playbook if a future tree-sitter/Emacs pairing regresses. The
+> grammar-rebuild command here is also stale — the config retired `treesit-auto`
+> on Emacs 31; see the current recipe in CLAUDE.md → "Tree-Sitter and Arch Linux".
+
 ## Problem: tree-sitter 0.26 breaks ALL tree-sitter modes in Emacs 30.2
 
 On 2026-04-09, Arch Linux upgraded `tree-sitter` from 0.25.10 to 0.26.8. The Arch

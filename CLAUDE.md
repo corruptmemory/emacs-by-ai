@@ -36,7 +36,7 @@ The file is organized in this order:
 10. **Editing packages** — multiple-cursors (with symbol-aware mark/skip bindings), expand-region, string-inflection, smartparens, flyspell (text-like modes only: text, org, markdown)
 11. **Git** — Magit, diff-hl (with flydiff for unsaved-change indicators)
 12. **Popup/buffer management** — Popper with project-based grouping, helpful; `ghostel` (libghostty-vt-backed terminal, replaces vterm) declared separately
-13. **Dev tooling** — treesit-auto, yasnippet, eglot (20+ language hooks, autoreconnect, harper-ls for writing modes), eglot-booster, consult-eglot, eldoc-box, flymake, dape (DAP)
+13. **Dev tooling** — built-in tree-sitter automation (`treesit-enabled-modes`; treesit-auto retired on Emacs 31), yasnippet, eglot (20+ language hooks, autoreconnect, harper-ls for writing modes), eglot-booster, consult-eglot, eldoc-box, flymake, dape (DAP)
 14. **Language configs** — Go (format-on-save, gotest, dape/Delve wrappers with auto-breakpoint), SQL (xref helpers, completion), docker, pdf-tools, compile-mode tweaks (ANSI color + Jai `line,column` error navigation — see below), then all other languages
 15. **AI writing assistant** — `cm/ai-*` exchange protocol for Claude Code integration (`C-c a` prefix), shared via `~/.emacs-ai/`, interactive `*ai-suggestions*` review buffer (`C-c a S`); immediately followed by **gptel** — general multi-backend LLM chat client (`C-c g` prefix), unrelated job (plain chat/rewrite; agentic mode added opt-in via gptel-agent) — see below
 16. **Multi-root project search** — `cm-project-roots.el` (loaded after the consult-eglot block): opt-in `C-c w` commands spanning dirs listed in a `.project-roots` file; LSP-first jump/refs, rg-based search/find-file; see below
@@ -131,7 +131,7 @@ returning empty and `not_in` present in the checked-out file.
 ## Ruby / Rails
 
 Added 2026-08-23 (interview refresh). Major mode is built-in **`ruby-ts-mode`**
-(tree-sitter; grammar via treesit-auto). The `init.el` block sits in the
+(tree-sitter; grammar auto-installs on demand). The `init.el` block sits in the
 language-configs section right after Haskell; the eglot wiring lives in the
 eglot `use-package` form (`ruby-ts-mode` in the `eglot-ensure` hook list + an
 explicit `eglot-server-programs` entry).
@@ -174,14 +174,18 @@ migrations, view routes. This is the modern replacement for both
   auto-pairing deferred to the global `electric-pair-mode`.
 
 **Why there is NO `auto-mode-alist` block** (and don't add one): unlike the
-CMake basename gotcha, Ruby needs no manual file associations. treesit-auto's
-ruby recipe **both** remaps `ruby-mode` → `ruby-ts-mode` **and** registers an
-`:ext` regex covering `.rb .ru .rake .thor .jbuilder .rabl .gemspec .podspec`
-plus basenames `Gemfile Rakefile Capfile Thorfile Puppetfile Berksfile Brewfile
-Vagrantfile Guardfile Podfile` → `ruby-ts-mode`; the built-in `ruby-mode`
-autoload maps the same set independently. Two layers already cover it, and Ruby
-basenames have no extension for a generic rule to steal. A manual block would be
-dead config.
+CMake basename gotcha, Ruby needs no manual file associations. The built-in
+`ruby-mode` autoload registers the full set — an `:ext` regex covering
+`.rb .ru .rake .thor .jbuilder .rabl .gemspec .podspec` plus **path-anchored**
+basenames `Gemfile Rakefile Capfile Thorfile Puppetfile Berksfile Brewfile
+Vagrantfile Guardfile Podfile` — and `treesit-enabled-modes` remaps `ruby-mode`
+→ `ruby-ts-mode`, so every one of those lands in `ruby-ts-mode`. (When
+treesit-auto still owned this, its ruby recipe registered the same set; retiring
+it lost nothing — verified that `/path/Gemfile`, `/path/Rakefile`, `.rake`,
+`.gemspec`, `.ru`, `.rb` all resolve to `ruby-ts-mode`.) The basenames are
+path-anchored (`/Gemfile\'`), so a full `buffer-file-name` matches even though a
+bare `"Gemfile"` string would not — and they have no extension for a generic
+rule to steal. A manual block would be dead config.
 
 **Ruby toolchain is mise** (not rbenv/chruby), and the environment is handled by
 the **`mise` Emacs package** (`eki3z/mise.el`; `global-mise-mode`, wired in the
@@ -208,31 +212,58 @@ reasonable nice-to-haves left out of the initial setup.
 
 ## Tree-Sitter and Arch Linux
 
-Tree-sitter grammars live in `tree-sitter/` (not checked into git — rebuilt per machine). To rebuild all grammars:
+Tree-sitter grammars live in `tree-sitter/` (not checked into git — rebuilt per
+machine). Since the Emacs 31 move, grammars **auto-install on demand**:
+`treesit-auto-install-grammar` is `always`, so visiting a file whose grammar is
+missing silently clones + compiles it from the source in
+`treesit-language-source-alist` (which the built-in ts-modes self-register, plus
+our small bash/scala/templ supplement — see the tree-sitter block in `init.el`).
+A fresh machine mostly self-heals just by opening files. To force a bulk rebuild
+(e.g. after a tree-sitter ABI bump):
 
 ```bash
 rm ~/.config/emacs/tree-sitter/*.so
 emacs --batch --init-directory=~/.config/emacs -l init.el --eval '
-(progn (require (quote treesit-auto)) (treesit-auto-install-all))'
+(progn
+  ;; require the built-in ts-modes so each self-registers its grammar source
+  (dolist (m (quote (go-ts-mode rust-ts-mode ruby-ts-mode python js c-ts-mode
+                     cmake-ts-mode css-mode java-ts-mode json-ts-mode
+                     html-ts-mode lua-ts-mode yaml-ts-mode toml-ts-mode
+                     dockerfile-ts-mode typescript-ts-mode sh-script)))
+    (ignore-errors (require m)))
+  (dolist (src treesit-language-source-alist)
+    (ignore-errors (treesit-install-language-grammar (car src)))))'
 ```
 
-**Known incompatibility:** Emacs 30.2's `treesit.c` is incompatible with tree-sitter 0.26+ (predicate naming conflict — Emacs uses `#match`, tree-sitter 0.26 requires `#match?`, and both validate in C). As of 2026-04-09, this system runs `tree-sitter 0.25.10` + `emacs-wayland 30.2-1` with both pinned in `/etc/pacman.conf` `IgnorePkg`. If tree-sitter modes break after a system update, check `pacman -Qi tree-sitter` — if it's 0.26+, downgrade both packages and rebuild grammars. See `docs/tree-sitter-026-fix.md` for the full diagnosis and step-by-step fix.
+**History — the tree-sitter 0.26 incompatibility (RESOLVED).** Through mid-2026
+this system pinned `tree-sitter 0.25.10` + `emacs-wayland 30.2` in
+`/etc/pacman.conf` `IgnorePkg` to dodge a predicate-naming catch-22 (Emacs
+30.2's `treesit.c` wanted `#match`, tree-sitter 0.26 wanted `#match?`, both
+validated in C). That pin was **removed 2026-05-20** once the 0.26 rebuild
+cascade settled, and the incompatibility is fully gone on the current stack
+(`Emacs 31.1` + `tree-sitter 0.26.9`) — verified by font-lock compiling clean
+across every `:match`-using mode (go/c/cmake/rust/ruby/java/lua/typescript/
+python/elixir). `docs/tree-sitter-026-fix.md` is retained as the historical
+diagnosis; its method (check `pacman -Qi tree-sitter`, rebuild grammars) still
+applies if tree-sitter modes ever break again after a system update.
 
 ## Emacs 31 migration
 
-**Landed 2026-08-24** (`GNU Emacs 31.1`, upgraded from the pinned 30.2 —
-tree-sitter stays pinned at 0.25.10 per the section above; that pin was about
-the tree-sitter *library*, unaffected by the Emacs jump). `docs/emacs-31-migration.md`
-is the living ledger tracking its impact on **this** config — release status
-(now historical), a condensed feature overview, what we can drop/simplify
-(chiefly retiring `treesit-auto` in favor of built-in `treesit-enabled-modes` +
-`treesit-auto-install-grammar`, gated on grammar-source coverage), the behavior
-watch-list, and a pre-flight checklist. Update the ledger's status boxes as
-remaining items are resolved. Two concrete items already known:
+**Landed 2026-08-24** (`GNU Emacs 31.1`, upgraded from 30.2; tree-sitter is
+`0.26.9`, unpinned since 2026-05-20 — see "Tree-Sitter and Arch Linux" above).
+`docs/emacs-31-migration.md` is the living ledger tracking its impact on **this**
+config — release status (now historical), a condensed feature overview, what we
+can drop/simplify, the behavior watch-list, and a pre-flight checklist. Update
+the ledger's status boxes as remaining items are resolved. Resolved so far
+(2026-08-27):
 
-- `go-ts-mode-indent-offset` (`init.el`) is renamed to `go-ts-indent-offset` in
-  31 — **not yet applied** (old name still works as a deprecated alias, so
-  this is a cosmetic cleanup, not urgent).
+- **Retired `treesit-auto` for the built-in tree-sitter automation** —
+  `treesit-enabled-modes` t + `treesit-auto-install-grammar` `always` + the
+  built-in modes' self-registered grammar sources replace it wholesale, and the
+  `cm/sanitize-auto-mode-alist` workaround it forced is gone too. See
+  "Tree-Sitter and Arch Linux" above and the tree-sitter block in `init.el`.
+- **`go-ts-mode-indent-offset` renamed to `go-ts-indent-offset`** (`init.el`) —
+  applied; 31 standardized the `FOO-ts-indent-offset` name.
 - **`templ-ts-mode` needed three local compatibility shims to even load on 31**
   — go-ts-mode dropped two internal capability-probe predicates
   (`-iota-query-supported-p`, `-method-elem-supported-p`), js.el turned two
@@ -248,19 +279,19 @@ remaining items are resolved. Two concrete items already known:
 
 ## CMake
 
-`cmake-ts-mode` is built-in (Emacs 29+); `treesit-auto` installs the `cmake`
-grammar and `cmake-language-server` is eglot's default (hooked at the
-`cmake-ts-mode` entry in the eglot block). No extra package is needed —
-highlighting is tree-sitter, so it works even when the LSP is absent.
+`cmake-ts-mode` is built-in (Emacs 29+); its grammar auto-installs on demand
+(`treesit-auto-install-grammar`) and `cmake-language-server` is eglot's default
+(hooked at the `cmake-ts-mode` entry in the eglot block). No extra package is
+needed — highlighting is tree-sitter, so it works even when the LSP is absent.
 
 **The one thing that isn't automatic** (a `use-package cmake-ts-mode :straight
 nil :mode …` block restores it): the `CMakeLists.txt` *basename* mapping.
-`treesit-auto` registers only the `.cmake` *extension*, and Emacs' generic
-`"\\.te?xt\\'" -> text-mode` rule then claims `CMakeLists.txt` — so the main
-CMake file silently opened in `text-mode` (no highlighting) while `foo.cmake`
-worked. `auto-mode-alist` is **first-match-wins**, so the fix is an explicit
-`("\\(?:CMakeLists\\.txt\\|\\.cmake\\)\\'" . cmake-ts-mode)` entry added *after*
-the treesit-auto block (later `add-to-list` prepends → wins over `.txt`). The
+`cmake-ts-mode`'s own autoload registers only the `.cmake` *extension*, and
+Emacs' generic `"\\.te?xt\\'" -> text-mode` rule then claims `CMakeLists.txt` —
+so the main CMake file silently opened in `text-mode` (no highlighting) while
+`foo.cmake` worked. `auto-mode-alist` is **first-match-wins**, so the fix is an
+explicit `("\\(?:CMakeLists\\.txt\\|\\.cmake\\)\\'" . cmake-ts-mode)` entry added
+*after* the built-in tree-sitter block (later `add-to-list` prepends → wins over `.txt`). The
 lesson generalizes: any basename-only filetype (no distinguishing extension)
 needs an explicit entry; extension-driven auto-registration will miss it.
 
@@ -290,7 +321,7 @@ org-src-lang-modes"* when run too early). Notes:
 
 - **Adding a mapping never errors, even if the target grammar is missing** — a
   tree-sitter mode with no grammar degrades to no-highlight (verified: `lua`
-  maps fine but stays plain until `treesit-auto` fetches the grammar on first
+  maps fine but stays plain until the grammar auto-installs on first
   `.lua` visit). So the list can safely name languages whose grammar isn't
   installed yet.
 - **`jai-ts-mode` is regex-based, not tree-sitter** (its name notwithstanding),

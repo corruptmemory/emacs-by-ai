@@ -971,24 +971,39 @@ Seeding is skipped for multi-line or very large regions."
   :config
   (advice-add 'recenter :after (lambda (&rest _) (nav-flash-show))))
 
-;;;; Tree-sitter — automatic grammar installation and mode remapping.
-(defun cm/sanitize-auto-mode-alist ()
-  "Remove invalid `auto-mode-alist' entries introduced by third-party code.
-Valid entries must have a regexp string as their car."
-  (setq auto-mode-alist
-        (cl-remove-if-not
-         (lambda (entry)
-           (and (consp entry)
-                (stringp (car entry))))
-         auto-mode-alist)))
-
-(use-package treesit-auto
-  :custom
-  (treesit-auto-install t)
-  :config
-  (treesit-auto-add-to-auto-mode-alist 'all)
-  (global-treesit-auto-mode)
-  (cm/sanitize-auto-mode-alist))
+;;;; Tree-sitter — built-in grammar management + mode remapping (Emacs 31).
+;; Emacs 31 folds treesit-auto's whole job into core, so the dependency — and the
+;; `cm/sanitize-auto-mode-alist' workaround it needed — is retired:
+;;   - `treesit-enabled-modes' = t remaps every base mode to its `-ts-mode'
+;;     variant through the built-in `treesit-major-mode-remap-alist', i.e. the
+;;     PROPER `major-mode-remap-alist' mechanism — not treesit-auto's
+;;     `auto-mode-alist' injection.  That injection is what produced the invalid
+;;     entries `cm/sanitize-auto-mode-alist' used to scrub; with treesit-auto
+;;     gone, the scrub is gone too.  Two contracts matter: it MUST be set with
+;;     `setopt' (the defcustom's `:set' is what populates the remap alist — a
+;;     bare `setq' is inert), and `treesit' must be loaded first so its remap
+;;     table exists (hence the `require').  Built-in ts-modes additionally
+;;     self-register graceful `*-ts-mode-maybe' auto-mode entries that fall back
+;;     to the base mode when a grammar is absent, so file→mode resolution needs
+;;     no help from us.
+;;   - `treesit-auto-install-grammar' = `always' fetches a missing grammar on
+;;     first visit (matching treesit-auto's old silent install; the built-in
+;;     knob takes symbols, not t/nil — use `ask' to be prompted, `never' to
+;;     never fetch).
+;;   - Built-in ts-modes self-register their grammar SOURCES in 31 (~22 langs:
+;;     go/gomod/gowork, rust, ruby, python, c/c++, java, json, css, html, cmake,
+;;     dockerfile, ts/tsx, yaml, toml, lua, javascript, …) and third-party
+;;     ts-modes register their own (scala-ts-mode, templ-ts-mode).  The
+;;     supplement below only adds the sources no loaded mode registers eagerly,
+;;     so a fresh machine — or an `rm tree-sitter/*.so' rebuild via
+;;     `M-x treesit-install-language-grammar' — can still fetch everything we use.
+(require 'treesit)
+(setopt treesit-enabled-modes t)          ; remap every base mode → *-ts-mode
+(setopt treesit-auto-install-grammar 'always) ; silently fetch a missing grammar on visit
+(dolist (src '((bash  "https://github.com/tree-sitter/tree-sitter-bash")
+               (scala "https://github.com/tree-sitter/tree-sitter-scala")
+               (templ "https://github.com/vrischmann/tree-sitter-templ")))
+  (add-to-list 'treesit-language-source-alist src))
 
 ;;;; yasnippet — snippet expansion (used by eglot for LSP snippets).
 (use-package yasnippet
@@ -1287,7 +1302,7 @@ if one isn't already set there."
 
 ;;;; Go.
 ;; go-ts-mode and go-mod-ts-mode are built-in; gopls is eglot's default.
-(setq go-ts-mode-indent-offset 4)
+(setq go-ts-indent-offset 4)
 
 (defun cm/eglot-organize-imports ()
   "Run gopls organize-imports code action via eglot, if available."
@@ -1670,11 +1685,12 @@ With prefix argument REFRESH, rebuild completion cache first."
 
 ;;;; CMake.
 ;; cmake-ts-mode is built-in; cmake-language-server is eglot's default.
-;; The grammar and the `.cmake' extension mapping come from treesit-auto, but
-;; nothing maps the `CMakeLists.txt' *basename* — and the generic
-;; `\.te?xt\' -> text-mode' rule otherwise claims it, leaving the main CMake
-;; file un-highlighted.  Restore the canonical basename+extension mapping
-;; explicitly (added after the treesit-auto block, so it prepends and wins).
+;; The `.cmake' extension mapping comes from cmake-ts-mode's own autoload (plus
+;; the built-in tree-sitter remap), but nothing maps the `CMakeLists.txt'
+;; *basename* — and the generic `\.te?xt\' -> text-mode' rule otherwise claims
+;; it, leaving the main CMake file un-highlighted.  Restore the canonical
+;; basename+extension mapping explicitly (this `:mode' entry prepends onto
+;; `auto-mode-alist', so it wins over the generic `.txt' rule).
 (use-package cmake-ts-mode
   :straight nil
   :mode "\\(?:CMakeLists\\.txt\\|\\.cmake\\)\\'")
@@ -1869,19 +1885,23 @@ narrow with truncation save.  Otherwise → error."
 
 ;;;; Scala.
 ;; scala-ts-mode provides tree-sitter font-lock, indentation, and imenu.
-;; treesit-auto handles grammar install and scala-mode → scala-ts-mode remap.
-;; No LSP — metals is too painful.
+;; The package self-registers its `.scala'/`.sc'/`.sbt' auto-mode entries, and
+;; its grammar is fetched on demand (`treesit-auto-install-grammar'); the `scala'
+;; source lives in the supplement in the tree-sitter block above (no built-in
+;; mode owns it).  No LSP — metals is too painful.
 (use-package scala-ts-mode)
 
 ;;;; Haskell.
 (use-package haskell-mode)
 
 ;;;; Ruby / Rails.
-;; Major mode is built-in `ruby-ts-mode' (tree-sitter).  treesit-auto already
-;; owns the file associations — its ruby recipe remaps `ruby-mode' and
-;; registers Gemfile/Rakefile/.rake/.gemspec/.ru/… → `ruby-ts-mode' — so no
+;; Major mode is built-in `ruby-ts-mode' (tree-sitter).  The built-in autoloads
+;; already own the file associations — `treesit-enabled-modes' remaps
+;; `ruby-mode', and ruby-mode's own path-anchored autoloads register
+;; Gemfile/Rakefile/Capfile/.rake/.gemspec/.ru/… → `ruby-ts-mode' — so no
 ;; `auto-mode-alist' block is needed here (cf. the CMake basename gotcha, which
-;; does NOT apply to Ruby).  LSP is Shopify ruby-lsp, wired in the eglot block
+;; does NOT apply to Ruby: its basenames are path-anchored in the built-in
+;; regex, so a full `buffer-file-name' matches).  LSP is Shopify ruby-lsp, wired in the eglot block
 ;; above; the Rails intelligence rides along when the app's Gemfile carries the
 ;; `ruby-lsp-rails' gem.  This section adds the surrounding tooling only.
 
@@ -1953,9 +1973,9 @@ narrow with truncation save.  Otherwise → error."
   ;; css/odin/zig/glsl/slang/fish/haskell resolve to a working base mode.
   ;;
   ;; Every entry was checked to fontify without error; a target whose grammar
-  ;; isn't installed yet degrades to no-highlight (never an error) until
-  ;; treesit-auto fetches it.  `jai-ts-mode' is regex-based, so it needs no
-  ;; grammar at all.  `ts'/`yml' are convenience aliases.
+  ;; isn't installed yet degrades to no-highlight (never an error) until the
+  ;; grammar is fetched (`treesit-auto-install-grammar').  `jai-ts-mode' is
+  ;; regex-based, so it needs no grammar at all.  `ts'/`yml' are convenience aliases.
   (with-eval-after-load 'org-src
     (dolist (pair '(("jai"        . jai-ts)
                     ("go"         . go-ts)

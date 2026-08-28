@@ -294,7 +294,8 @@ no byte-compile deprecation warning."
   "Apply EDIT-SPEC to TARGET buffer under optimistic concurrency (BASE-TICK).
 EDIT-SPEC is (:kind full :text NEW-TEXT).  Returns a package: an `applied'
 elisp package (auto path), a `pending' elisp package (review path), or an
-`error' package (unknown-target / stale-buffer / unsupported-kind)."
+`error' package (unknown-target / stale-buffer / unsupported-kind /
+invalid-edit-spec)."
   (cm/ai-with-package
     (let ((buf (cm/ai--resolve-buffer target)))
       (cond

@@ -543,7 +543,8 @@ a saved-clean file just edit the file directly and auto-revert picks it up):
 - You emit the *full* new buffer text; Emacs applies it minimally via
   `replace-region-contents` (point/undo preserved) — not `replace-buffer-contents`,
   which is 31.1-obsolete. `BASE-TICK` is the `:tick` from your read — a mismatch
-  returns `(:code stale-buffer)`, so re-read and retry.
+  returns `(:code stale-buffer)`, so re-read and retry; a missing/non-string
+  `:text` returns `(:code invalid-edit-spec)`.
 - **DWIM gate:** small edits (≤ `cm/ai-apply-auto-max-hunks`=1 hunk and
   ≤ `cm/ai-apply-auto-max-lines`=8 lines) auto-apply and return
   `(:status applied …)`. Larger/scattered edits (or a read-only buffer, or

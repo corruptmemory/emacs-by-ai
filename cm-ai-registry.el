@@ -69,5 +69,36 @@
   "List descriptor files in `cm/ai-registry-dir'."
   (cm/ai-registry--files* cm/ai-registry-dir))
 
+(defun cm/ai-registry--pid-live-p (pid)
+  "Return non-nil if PID is a running process (Linux /proc)."
+  (and (integerp pid) (> pid 0)
+       (file-exists-p (format "/proc/%d" pid))))
+
+(defun cm/ai-registry--sweep (dir &optional live-pred)
+  "Delete descriptors in DIR whose PID is not live (LIVE-PRED, default /proc)."
+  (let ((live (or live-pred #'cm/ai-registry--pid-live-p)))
+    (dolist (f (cm/ai-registry--files* dir))
+      (let ((d (cm/ai-registry--read f)))
+        (when (and d (not (funcall live (plist-get d :pid))))
+          (ignore-errors (delete-file f)))))))
+
+(defun cm/ai-registry--file (&optional server)
+  "Descriptor path for SERVER (default this instance's `server-name')."
+  (expand-file-name (format "%s.json" (or server server-name))
+                    cm/ai-registry-dir))
+
+(defun cm/ai-registry-register ()
+  "Write this instance's descriptor, sweep dead ones, install exit cleanup."
+  (when (and (boundp 'server-name) server-name)
+    (cm/ai-registry--sweep cm/ai-registry-dir)
+    (cm/ai-registry--write (cm/ai-registry-descriptor) cm/ai-registry-dir)
+    (add-hook 'kill-emacs-hook #'cm/ai-registry-deregister)))
+
+(defun cm/ai-registry-deregister ()
+  "Remove this instance's descriptor file."
+  (when (and (boundp 'server-name) server-name)
+    (let ((f (cm/ai-registry--file)))
+      (when (file-exists-p f) (ignore-errors (delete-file f))))))
+
 (provide 'cm-ai-registry)
 ;;; cm-ai-registry.el ends here

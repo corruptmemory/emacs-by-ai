@@ -25,5 +25,28 @@
     (should (equal (plist-get got :pid) 4242))
     (should (member file (cm/ai-registry--files* dir)))))
 
+(ert-deftest cm/ai-registry-sweep-drops-dead-keeps-live ()
+  (let* ((dir (file-name-as-directory (make-temp-file "cmair" t)))
+         (live-pred (lambda (pid) (= pid 1)))) ; only pid 1 is "live"
+    (cm/ai-registry--write '((server_name . "emacs-1") (pid . 1)
+                             (project_root . "/a/")) dir)
+    (cm/ai-registry--write '((server_name . "emacs-2") (pid . 2)
+                             (project_root . "/b/")) dir)
+    (cm/ai-registry--sweep dir live-pred)
+    (should (file-exists-p (expand-file-name "emacs-1.json" dir)))
+    (should-not (file-exists-p (expand-file-name "emacs-2.json" dir)))))
+
+(ert-deftest cm/ai-registry-register-and-deregister ()
+  (let* ((dir (file-name-as-directory (make-temp-file "cmair" t)))
+         (cm/ai-registry-dir dir)
+         (server-name (format "emacs-%d" (emacs-pid)))
+         (default-directory temporary-file-directory)
+         (kill-emacs-hook nil))
+    (cm/ai-registry-register)
+    (should (file-exists-p (cm/ai-registry--file)))
+    (should (memq #'cm/ai-registry-deregister kill-emacs-hook))
+    (cm/ai-registry-deregister)
+    (should-not (file-exists-p (cm/ai-registry--file)))))
+
 (provide 'cm-ai-registry-tests)
 ;;; cm-ai-registry-tests.el ends here

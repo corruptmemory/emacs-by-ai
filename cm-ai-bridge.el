@@ -307,11 +307,16 @@ elisp package (auto path), a `pending' elisp package (review path), or an
                                                  (plist-get edit-spec :kind)))))
        (t
         (with-current-buffer buf
-          (if (/= (buffer-chars-modified-tick) base-tick)
-              (cm/ai-pkg 'error (list :code 'stale-buffer
-                                      :message "Buffer changed since read; re-read and retry"
-                                      :expected base-tick
-                                      :actual (buffer-chars-modified-tick)))
+          (cond
+           ((/= (buffer-chars-modified-tick) base-tick)
+            (cm/ai-pkg 'error (list :code 'stale-buffer
+                                    :message "Buffer changed since read; re-read and retry"
+                                    :expected base-tick
+                                    :actual (buffer-chars-modified-tick))))
+           ((not (stringp (plist-get edit-spec :text)))
+            (cm/ai-pkg 'error (list :code 'invalid-edit-spec
+                                    :message "edit-spec :text must be a string")))
+           (t
             (let* ((proposed (plist-get edit-spec :text))
                    (current (buffer-substring-no-properties (point-min) (point-max)))
                    (stats (cm/ai--diff-stats current proposed))
@@ -326,7 +331,7 @@ elisp package (auto path), a `pending' elisp package (review path), or an
                   (cm/ai-pkg 'elisp (list :status 'pending
                                           :review-buffer (buffer-name rbuf)
                                           :hunks (plist-get stats :hunks)
-                                          :lines (plist-get stats :lines)))))))))))))
+                                          :lines (plist-get stats :lines))))))))))))))
 
 ;;;; Review gate — diff-mode buffer + human apply/reject.
 

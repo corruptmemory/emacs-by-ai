@@ -4,7 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Personal Emacs configuration. Requires Emacs 29+. No build system. Most `.el` files are loaded directly by Emacs; `cm-project-roots.el` has an ERT suite under `tests/` (run `./tests/run-tests.sh`). Test changes with:
+Personal Emacs configuration. Requires Emacs 31+ (the AI bridge write path uses
+31-only semantics — see "Packages protocol + write path" below). No build system. Most `.el` files are loaded directly by Emacs; `cm-project-roots.el` has an ERT suite under `tests/` (run `./tests/run-tests.sh`). Test changes with:
 
 ```sh
 emacs --init-directory=~/.config/emacs/
@@ -450,16 +451,16 @@ File-based exchange protocol at `~/.emacs-ai/` for interactive writing feedback:
 - `cm/ai-show-suggestions` (`C-c a S`) — opens `*ai-suggestions*` review buffer (see below)
 - For saved files, Claude Code can edit directly — `global-auto-revert-mode` picks up changes
 
-Remote query functions — **always use `emacs-send -e` instead of raw `emacsclient`** (it resolves the correct PID-based server, cleans stale sockets, and never spawns rogue instances):
-- `(cm/ai-current-context)` — JSON with file, mode, line, column, region bounds, org heading path
-- `(cm/ai-visible-buffers)` — JSON array of all visible buffers across frames
-- `(cm/ai-get-content)` — snapshots focused buffer to exchange dir, returns context JSON
-- `(cm/ai-get-content "buffer-name")` — snapshots a specific buffer by name
-- `(cm/ai-paragraph-at-point)` — returns paragraph text at point (no side effects)
-- `(cm/ai-line-at-point)` — returns current line text
-- `(cm/ai-region-or-paragraph)` — JSON with region text if active, else paragraph at point
-- `(cm/ai-org-subtree-at-point)` — returns org subtree at point (nil outside org-mode)
-- `(cm/ai-nearby-lines)` / `(cm/ai-nearby-lines N)` — context lines around point with arrow marker
+Remote query functions — **always use `emacs-send -e` instead of raw `emacsclient`** (it resolves the correct PID-based server, cleans stale sockets, and never spawns rogue instances). Each remote read now returns a typed **package** (`elisp`/`text`/`ref`/`error` — see "Packages protocol + write path" below for the full envelope contract); the summaries here describe payload content only:
+- `(cm/ai-current-context)` — elisp package: file, mode, line, column, region bounds, org heading path
+- `(cm/ai-visible-buffers)` — elisp package: all visible buffers across frames
+- `(cm/ai-get-content)` — ref package: snapshots focused buffer to the exchange dir (`content.txt`)
+- `(cm/ai-get-content "buffer-name")` — ref package: snapshots a specific buffer by name
+- `(cm/ai-paragraph-at-point)` — text package: paragraph at point (no side effects)
+- `(cm/ai-line-at-point)` — text package: current line text
+- `(cm/ai-region-or-paragraph)` — elisp package: region text if active, else paragraph at point
+- `(cm/ai-org-subtree-at-point)` — text package: org subtree at point, or an `error` package (`not-org-mode`) outside org-mode
+- `(cm/ai-nearby-lines nil)` / `(cm/ai-nearby-lines nil N)` — text package: N lines (default 5) around point with arrow marker
 - `(cm/ai-show-suggestions)` — display `*ai-suggestions*` buffer from `suggestions.json`
 
 ### Multi-Suggestion Review (`*ai-suggestions*` buffer)
@@ -527,6 +528,12 @@ calls return a self-describing elisp package:
   `cm/ai-line-at-point`, `cm/ai-region-or-paragraph`, `cm/ai-org-subtree-at-point`
   (`not-org-mode` error outside org), `cm/ai-nearby-lines`. Each takes an optional
   TARGET (buffer name or file path; default focused) and `:as 'json`.
+- **Call shape:** `:as` is a keyword arg and must follow the positional TARGET,
+  so json for the *focused* buffer needs an explicit `nil` target —
+  `(cm/ai-current-context nil :as 'json)`, not `(cm/ai-current-context :as
+  'json)` (the latter raises a raw arglist error before `cm/ai-with-package`
+  can wrap it — malformed call shapes, unlike runtime failures, are outside
+  the error-package guarantee).
 
 **Writing a buffer** (dirty/unsaved buffers, or when you want a review gate; for
 a saved-clean file just edit the file directly and auto-revert picks it up):
@@ -534,8 +541,9 @@ a saved-clean file just edit the file directly and auto-revert picks it up):
     (cm/ai-apply-edit TARGET BASE-TICK '(:kind full :text "NEW WHOLE-BUFFER TEXT") REVIEW)
 
 - You emit the *full* new buffer text; Emacs applies it minimally via
-  `replace-buffer-contents` (point/undo preserved). `BASE-TICK` is the `:tick`
-  from your read — a mismatch returns `(:code stale-buffer)`, so re-read and retry.
+  `replace-region-contents` (point/undo preserved) — not `replace-buffer-contents`,
+  which is 31.1-obsolete. `BASE-TICK` is the `:tick` from your read — a mismatch
+  returns `(:code stale-buffer)`, so re-read and retry.
 - **DWIM gate:** small edits (≤ `cm/ai-apply-auto-max-hunks`=1 hunk and
   ≤ `cm/ai-apply-auto-max-lines`=8 lines) auto-apply and return
   `(:status applied …)`. Larger/scattered edits (or a read-only buffer, or

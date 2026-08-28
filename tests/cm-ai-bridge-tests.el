@@ -162,6 +162,17 @@
         (should (equal (buffer-substring-no-properties (point-min) (point-max))
                        "A\nB\nc\nd\ne\nf\ng\nh\ni\nj\n"))))))
 
+(ert-deftest cm/ai-apply-edit-invalid-text-errors ()
+  (with-temp-buffer
+    (insert "hello\n") (rename-buffer "cm-ai-invalid-text" t)
+    (let* ((tick (buffer-chars-modified-tick))
+           (p (cm/ai-apply-edit (buffer-name) tick '(:kind full :text nil) 'auto)))
+      (should (eq (plist-get p :type) 'error))
+      (should (eq (plist-get (plist-get p :payload) :code) 'invalid-edit-spec))
+      ;; buffer untouched
+      (should (equal (buffer-substring-no-properties (point-min) (point-max))
+                     "hello\n")))))
+
 (ert-deftest cm/ai-edit-apply-refuses-stale ()
   (with-temp-buffer
     (insert "orig\n") (rename-buffer "cm-ai-rev2" t)

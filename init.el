@@ -2160,8 +2160,8 @@ independently without cross-contamination."
 ;;   (cm/ai-line-at-point)               → elisp/text/ref/error package (see cm-ai-bridge.el)
 ;;   (cm/ai-region-or-paragraph)         → elisp/text/ref/error package (see cm-ai-bridge.el)
 ;;   (cm/ai-org-subtree-at-point)        → elisp/text/ref/error package (see cm-ai-bridge.el)
-;;   (cm/ai-nearby-lines)                → elisp/text/ref/error package (see cm-ai-bridge.el)
-;;   (cm/ai-nearby-lines N)              → elisp/text/ref/error package (see cm-ai-bridge.el)
+;;   (cm/ai-nearby-lines nil)            → elisp/text/ref/error package (see cm-ai-bridge.el)
+;;   (cm/ai-nearby-lines nil N)          → elisp/text/ref/error package (see cm-ai-bridge.el)
 ;;   Each also takes an optional TARGET (buffer name or file path) and a
 ;;   :as 'json keyword to re-render as a `json' package, e.g.
 ;;   (cm/ai-current-context "some-buffer" :as 'json).
@@ -2556,8 +2556,8 @@ Call this interactively with \\[cm/ai-show-suggestions] or remotely via:
 ;;   (cm/ai-line-at-point)           → text package
 ;;   (cm/ai-region-or-paragraph)     → elisp package (scope+text)
 ;;   (cm/ai-org-subtree-at-point)    → text package (or not-org-mode error)
-;;   (cm/ai-nearby-lines)            → text package
-;;   (cm/ai-nearby-lines N)          → text package
+;;   (cm/ai-nearby-lines nil)        → text package
+;;   (cm/ai-nearby-lines nil N)      → text package
 ;;   (cm/ai-show-suggestions)        → display *ai-suggestions* from suggestions.json
 ;;   (cm/ai-apply-edit TARGET TICK EDIT REVIEW) → apply an edit (see cm-ai-bridge.el / CLAUDE.md)
 

@@ -9,9 +9,9 @@
 
 (require 'json)
 (require 'cl-lib)
+(require 'server)  ; for the server-name / server-socket-dir special vars
 
 (declare-function project-root "project")
-(defvar server-name nil)
 
 (defgroup cm/ai-registry nil "Per-instance Emacs registry." :group 'tools)
 

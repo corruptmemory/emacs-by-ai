@@ -1,5 +1,17 @@
 # Agentic gptel (`gptel-agent`) Implementation Plan
 
+> **⚠️ ABANDONED (2026-08-28).** The whole in-Emacs LLM line — `gptel`,
+> `gptel-agent`, `gptel-magit`, and `macher` — was **removed from the config** on
+> 2026-08-28. This plan is retained only as a record of a tried-and-rejected
+> experiment; it no longer describes anything in the config.
+>
+> **Why (a shift in direction, not a rejection of the idea):** driving the models
+> from *inside* Emacs doesn't replace the stronger external agent harnesses
+> (Claude Code, Codex, …). The direction for "emacs+agents" is to **compose with
+> those external harnesses** while **exposing Emacs's internal tooling to them** —
+> the inverse of gptel's drive-the-model-from-Emacs model. The kept `cm/ai-*`
+> Claude-Code bridge is the seed of that approach.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add an opt-in agentic mode to the in-Emacs `gptel` client via karthink's first-party `gptel-agent`, with full in-project autonomy (git as the undo net).

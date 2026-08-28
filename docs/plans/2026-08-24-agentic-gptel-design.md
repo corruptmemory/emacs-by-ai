@@ -1,10 +1,23 @@
 # Agentic gptel (`gptel-agent`) — Design
 
+> **⚠️ ABANDONED (2026-08-28).** The entire in-Emacs LLM line — `gptel`,
+> `gptel-agent`, `gptel-magit`, and `macher` — was **removed from the config**
+> on 2026-08-28. This document is retained only as a record of a tried-and-
+> rejected experiment; nothing below describes the current setup.
+>
+> **Why (a shift in direction, not a rejection of the idea):** driving the models
+> from *inside* Emacs doesn't replace the power of the stronger external agent
+> harnesses (Claude Code, Codex, …). The chosen direction for "emacs+agents" is
+> to **compose with those external harnesses** while **exposing all of Emacs's
+> internal tooling to them** — the inverse of gptel's drive-the-model-from-Emacs
+> model. karthink is right that far more is possible between Emacs and agents; the
+> disagreement is only about *where the agent lives*. The rudimentary `cm/ai-*`
+> Claude-Code bridge (kept) is the seed of that composition approach.
+
 **Date:** 2026-08-24
-**Status:** Implemented and shipped to `master` 2026-08-24 (user-confirmed on a
-live frame, preliminary testing). See "Implementation notes (as shipped)" at the
-end. Commits `171dd10` (block + `C-c g A`), `2843698` (`C-c g P`), `b3d2ab0`
-(docs).
+**Status:** **Abandoned / removed 2026-08-28** — see the banner above. (Was:
+Implemented and shipped to `master` 2026-08-24; commits `171dd10` (block + `C-c g
+A`), `2843698` (`C-c g P`), `b3d2ab0` (docs).)
 
 ## Goal
 

@@ -1,5 +1,17 @@
 # gptel presets — research notes (not yet implemented)
 
+> **⚠️ ABANDONED (2026-08-28).** `gptel` (and `gptel-agent`, `gptel-magit`,
+> `macher`) was **removed from the config** on 2026-08-28; these presets were
+> never implemented and now never will be under gptel. Retained only as research
+> notes from a tried-and-rejected experiment.
+>
+> **Why (a shift in direction, not a rejection of the idea):** driving the models
+> from *inside* Emacs doesn't replace the stronger external agent harnesses
+> (Claude Code, Codex, …). The direction for "emacs+agents" is to **compose with
+> those external harnesses** while **exposing Emacs's internal tooling to them** —
+> the inverse of gptel's drive-the-model-from-Emacs model. The kept `cm/ai-*`
+> Claude-Code bridge is the seed of that approach.
+
 **Source:** [karthink](https://www.youtube.com/watch?v=xHEnWvKmSKM) (gptel's
 author), "stdin | LLM | stdout", published 2026-08-19, watched 2026-08-21.
 These are my own notes/synthesis, not a transcript.

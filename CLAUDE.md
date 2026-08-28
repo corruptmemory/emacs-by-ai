@@ -509,6 +509,43 @@ removed on `kill-emacs`). This retires `~/.emacs-last-used` guessing:
 
 Design + plan: `docs/plans/2026-08-28-emacs-agents-bridge-{design,phase1-plan}.md`.
 
+### Packages protocol + write path (cm-ai-bridge.el)
+
+The remote query surface now speaks a typed **packages** protocol and gains a
+review-gated **write path**. All remote (`emacsclient -e` / `emacs-send -e`)
+calls return a self-describing elisp package:
+
+    (:v 1 :type TYPE :payload PAYLOAD :meta (:buffer B :tick N :server S …))
+
+- `TYPE` ∈ `elisp` (structured plist) · `text` (string) · `markdown` · `json`
+  (only with `:as 'json`) · `ref` (`:payload (:path … :bytes N :of text)` — read
+  the file for the content) · `error` (`:payload (:code SYM :message STR …)`).
+- Agent-side handling: read the outer plist, dispatch on `:type`; `error` →
+  surface the `:code`/`:message`; `ref` → read `:path`; keep `:meta`'s `:tick`
+  for the write path. Migrated reads: `cm/ai-current-context`,
+  `cm/ai-visible-buffers`, `cm/ai-get-content` (ref), `cm/ai-paragraph-at-point`,
+  `cm/ai-line-at-point`, `cm/ai-region-or-paragraph`, `cm/ai-org-subtree-at-point`
+  (`not-org-mode` error outside org), `cm/ai-nearby-lines`. Each takes an optional
+  TARGET (buffer name or file path; default focused) and `:as 'json`.
+
+**Writing a buffer** (dirty/unsaved buffers, or when you want a review gate; for
+a saved-clean file just edit the file directly and auto-revert picks it up):
+
+    (cm/ai-apply-edit TARGET BASE-TICK '(:kind full :text "NEW WHOLE-BUFFER TEXT") REVIEW)
+
+- You emit the *full* new buffer text; Emacs applies it minimally via
+  `replace-buffer-contents` (point/undo preserved). `BASE-TICK` is the `:tick`
+  from your read — a mismatch returns `(:code stale-buffer)`, so re-read and retry.
+- **DWIM gate:** small edits (≤ `cm/ai-apply-auto-max-hunks`=1 hunk and
+  ≤ `cm/ai-apply-auto-max-lines`=8 lines) auto-apply and return
+  `(:status applied …)`. Larger/scattered edits (or a read-only buffer, or
+  `REVIEW` = `force`) pop a diff review buffer and return `(:status pending
+  :review-buffer NAME)` — Jim applies with `C-c C-c` / rejects with `C-c C-k`;
+  the edit is NOT applied until then (re-read the buffer to confirm). `REVIEW`
+  overrides: `force | skip | auto` (default `auto`).
+
+Design: `docs/plans/2026-08-28-emacs-agents-bridge-{design,phase2-plan}.md`.
+
 ## Multi-root project search ("Add Folder to Project")
 
 `cm-project-roots.el` (a sibling library loaded from `init.el`, like `jai-ts-mode.el`) adds opt-in commands that run search/navigation across directories listed in a `.project-roots` file at the primary project root. The primary root is implicit; extra dirs are one-per-line (`#` comments, `~`/relative allowed, missing dirs skipped with a warning). `cm/project-roots` is the single source of truth all commands read.

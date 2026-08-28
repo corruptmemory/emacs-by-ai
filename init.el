@@ -2548,17 +2548,18 @@ Call this interactively with \\[cm/ai-show-suggestions] or remotely via:
 ;;   C-c a S  show *ai-suggestions* buffer (n/p/a/d/q)
 ;;
 ;; AI writing assistant (remote — Claude Code calls via emacsclient -e):
-;;   (cm/ai-current-context)         → JSON metadata for focused buffer
-;;   (cm/ai-visible-buffers)         → JSON array of all visible buffers
-;;   (cm/ai-get-content)             → snapshot focused buffer to exchange dir
-;;   (cm/ai-get-content "buf-name")  → snapshot named buffer to exchange dir
-;;   (cm/ai-paragraph-at-point)      → paragraph text at point
-;;   (cm/ai-line-at-point)           → current line text
-;;   (cm/ai-region-or-paragraph)     → JSON: region if active, else paragraph
-;;   (cm/ai-org-subtree-at-point)    → org subtree (nil outside org-mode)
-;;   (cm/ai-nearby-lines)            → ±5 lines with → marker on current line
-;;   (cm/ai-nearby-lines N)          → ±N lines with → marker
+;;   (cm/ai-current-context)         → elisp package (context: file/mode/line/region/…)
+;;   (cm/ai-visible-buffers)         → elisp package (visible buffers)
+;;   (cm/ai-get-content)             → ref package (content.txt)
+;;   (cm/ai-get-content "buf-name")  → ref package (content.txt)
+;;   (cm/ai-paragraph-at-point)      → text package
+;;   (cm/ai-line-at-point)           → text package
+;;   (cm/ai-region-or-paragraph)     → elisp package (scope+text)
+;;   (cm/ai-org-subtree-at-point)    → text package (or not-org-mode error)
+;;   (cm/ai-nearby-lines)            → text package
+;;   (cm/ai-nearby-lines N)          → text package
 ;;   (cm/ai-show-suggestions)        → display *ai-suggestions* from suggestions.json
+;;   (cm/ai-apply-edit TARGET TICK EDIT REVIEW) → apply an edit (see cm-ai-bridge.el / CLAUDE.md)
 
 
 ;;; init.el ends here

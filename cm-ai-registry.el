@@ -100,5 +100,30 @@
     (let ((f (cm/ai-registry--file)))
       (when (file-exists-p f) (ignore-errors (delete-file f))))))
 
+(defun cm/ai-registry-resolve (cwd &optional live-pred)
+  "Return the server-name whose project best matches CWD, or nil.
+Match = CWD is within `project_root'; rank by most-specific root, then
+newest `started'.  LIVE-PRED (default /proc) filters dead instances."
+  (let* ((cwd (file-name-as-directory (expand-file-name cwd)))
+         (live (or live-pred #'cm/ai-registry--pid-live-p))
+         (cands (cl-loop for f in (cm/ai-registry--files)
+                         for d = (cm/ai-registry--read f)
+                         when (and d
+                                   (stringp (plist-get d :project_root))
+                                   (string-prefix-p (plist-get d :project_root) cwd)
+                                   (funcall live (plist-get d :pid)))
+                         collect d)))
+    (when cands
+      (plist-get
+       (car (sort cands
+                  (lambda (a b)
+                    (let ((la (length (plist-get a :project_root)))
+                          (lb (length (plist-get b :project_root))))
+                      (if (= la lb)
+                          (string> (or (plist-get a :started) "")
+                                   (or (plist-get b :started) ""))
+                        (> la lb))))))
+       :server_name))))
+
 (provide 'cm-ai-registry)
 ;;; cm-ai-registry.el ends here

@@ -48,5 +48,43 @@
     (cm/ai-registry-deregister)
     (should-not (file-exists-p (cm/ai-registry--file)))))
 
+(ert-deftest cm/ai-registry-resolve-most-specific-then-newest ()
+  (let* ((dir (file-name-as-directory (make-temp-file "cmair" t)))
+         (cm/ai-registry-dir dir)
+         (all-live (lambda (_pid) t)))
+    ;; broad root, older
+    (cm/ai-registry--write '((server_name . "emacs-10") (pid . 10)
+                             (project_root . "/home/jim/projects/")
+                             (started . "2026-08-28T10:00:00+0000")) dir)
+    ;; specific root, older
+    (cm/ai-registry--write '((server_name . "emacs-11") (pid . 11)
+                             (project_root . "/home/jim/projects/app/")
+                             (started . "2026-08-28T10:00:00+0000")) dir)
+    ;; specific root, newer -> should win on tie of specificity
+    (cm/ai-registry--write '((server_name . "emacs-12") (pid . 12)
+                             (project_root . "/home/jim/projects/app/")
+                             (started . "2026-08-28T20:00:00+0000")) dir)
+    (should (equal (cm/ai-registry-resolve "/home/jim/projects/app/sub/deep" all-live)
+                   "emacs-12"))
+    ;; a cwd only the broad root covers
+    (should (equal (cm/ai-registry-resolve "/home/jim/projects/other/x" all-live)
+                   "emacs-10"))))
+
+(ert-deftest cm/ai-registry-resolve-filters-dead-and-nonmatching ()
+  (let* ((dir (file-name-as-directory (make-temp-file "cmair" t)))
+         (cm/ai-registry-dir dir)
+         (only-13-live (lambda (pid) (= pid 13))))
+    (cm/ai-registry--write '((server_name . "emacs-13") (pid . 13)
+                             (project_root . "/home/jim/projects/app/")
+                             (started . "2026-08-28T10:00:00+0000")) dir)
+    (cm/ai-registry--write '((server_name . "emacs-14") (pid . 14)
+                             (project_root . "/home/jim/projects/app/")
+                             (started . "2026-08-28T20:00:00+0000")) dir)
+    ;; newer 14 is dead -> live 13 wins despite older
+    (should (equal (cm/ai-registry-resolve "/home/jim/projects/app/x" only-13-live)
+                   "emacs-13"))
+    ;; cwd outside every project_root -> nil
+    (should-not (cm/ai-registry-resolve "/tmp/unrelated" only-13-live))))
+
 (provide 'cm-ai-registry-tests)
 ;;; cm-ai-registry-tests.el ends here

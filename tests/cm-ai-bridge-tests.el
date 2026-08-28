@@ -104,5 +104,43 @@
       (should (string-match-p "cm-ai-json" (plist-get p :payload)))
       (should (integerp (plist-get (plist-get p :meta) :tick))))))
 
+(ert-deftest cm/ai-diff-stats-counts ()
+  (let ((s (cm/ai--diff-stats "a\nb\nc\n" "a\nB\nc\n")))
+    (should (= (plist-get s :hunks) 1))
+    (should (>= (plist-get s :lines) 2))))  ; -b +B
+
+(ert-deftest cm/ai-apply-decision-thresholds ()
+  (let ((cm/ai-apply-auto-max-hunks 1) (cm/ai-apply-auto-max-lines 8))
+    (should (eq (cm/ai--apply-decision '(:hunks 1 :lines 2) 'auto nil) 'auto))
+    (should (eq (cm/ai--apply-decision '(:hunks 3 :lines 2) 'auto nil) 'review))
+    (should (eq (cm/ai--apply-decision '(:hunks 1 :lines 40) 'auto nil) 'review))
+    (should (eq (cm/ai--apply-decision '(:hunks 1 :lines 2) 'force nil) 'review))
+    (should (eq (cm/ai--apply-decision '(:hunks 9 :lines 9) 'skip nil) 'auto))
+    (should (eq (cm/ai--apply-decision '(:hunks 1 :lines 1) 'auto t) 'review))))  ; read-only
+
+(ert-deftest cm/ai-apply-edit-auto-applies ()
+  (with-temp-buffer
+    (insert "one\ntwo\nthree\n") (rename-buffer "cm-ai-apply" t)
+    (let* ((tick (buffer-chars-modified-tick))
+           (p (cm/ai-apply-edit (buffer-name) tick
+                                '(:kind full :text "one\nTWO\nthree\n") 'auto)))
+      (should (eq (plist-get p :type) 'elisp))
+      (should (eq (plist-get (plist-get p :payload) :status) 'applied))
+      (should (equal (buffer-substring-no-properties (point-min) (point-max))
+                     "one\nTWO\nthree\n")))))
+
+(ert-deftest cm/ai-apply-edit-stale-tick-errors ()
+  (with-temp-buffer
+    (insert "x\n") (rename-buffer "cm-ai-stale" t)
+    (let ((p (cm/ai-apply-edit (buffer-name) 999999
+                               '(:kind full :text "y\n") 'auto)))
+      (should (eq (plist-get p :type) 'error))
+      (should (eq (plist-get (plist-get p :payload) :code) 'stale-buffer)))))
+
+(ert-deftest cm/ai-apply-edit-unknown-target-errors ()
+  (let ((p (cm/ai-apply-edit "no-such-buf" 1 '(:kind full :text "z") 'auto)))
+    (should (eq (plist-get p :type) 'error))
+    (should (eq (plist-get (plist-get p :payload) :code) 'unknown-target))))
+
 (provide 'cm-ai-bridge-tests)
 ;;; cm-ai-bridge-tests.el ends here

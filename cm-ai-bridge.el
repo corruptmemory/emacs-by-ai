@@ -234,5 +234,96 @@ The current line is marked with an arrow."
 
 (declare-function org-end-of-subtree "org")
 
+;;;; Write path — DWIM auto/review edit application.
+
+(defcustom cm/ai-apply-auto-max-hunks 1
+  "Auto-apply an AI edit only if it touches at most this many diff hunks."
+  :type 'integer :group 'tools)
+
+(defcustom cm/ai-apply-auto-max-lines 8
+  "Auto-apply an AI edit only if it changes at most this many lines."
+  :type 'integer :group 'tools)
+
+(defun cm/ai--unified-diff (old new)
+  "Return the unified diff string from OLD text to NEW text."
+  (let ((fa (make-temp-file "ai-diff-a")) (fb (make-temp-file "ai-diff-b")))
+    (unwind-protect
+        (progn
+          (with-temp-file fa (insert old))
+          (with-temp-file fb (insert new))
+          (with-temp-buffer
+            (call-process "diff" nil t nil "-u" fa fb)
+            (buffer-string)))
+      (ignore-errors (delete-file fa))
+      (ignore-errors (delete-file fb)))))
+
+(defun cm/ai--diff-stats (old new)
+  "Return (:hunks H :lines L) between OLD and NEW text."
+  (let ((hunks 0) (lines 0))
+    (dolist (ln (split-string (cm/ai--unified-diff old new) "\n"))
+      (cond
+       ((string-prefix-p "@@" ln) (setq hunks (1+ hunks)))
+       ((and (> (length ln) 0)
+             (memq (aref ln 0) '(?+ ?-))
+             (not (string-prefix-p "+++" ln))
+             (not (string-prefix-p "---" ln)))
+        (setq lines (1+ lines)))))
+    (list :hunks hunks :lines lines)))
+
+(defun cm/ai--apply-decision (stats review read-only)
+  "Return `auto' or `review' for STATS, honoring REVIEW override + READ-ONLY."
+  (cond
+   ((eq review 'force) 'review)
+   ((eq review 'skip) 'auto)
+   (read-only 'review)
+   ((and (<= (plist-get stats :hunks) cm/ai-apply-auto-max-hunks)
+         (<= (plist-get stats :lines) cm/ai-apply-auto-max-lines))
+    'auto)
+   (t 'review)))
+
+(defun cm/ai--replace-contents (buf text)
+  "Minimally replace BUF's contents with TEXT (preserves point/markers/undo).
+Uses `replace-region-contents' (Emacs 31+) rather than the now-obsolete
+`replace-buffer-contents' — same non-destructive-replacement contract,
+no byte-compile deprecation warning."
+  (with-current-buffer buf
+    (replace-region-contents (point-min) (point-max) text)))
+
+(defun cm/ai-apply-edit (target base-tick edit-spec &optional review)
+  "Apply EDIT-SPEC to TARGET buffer under optimistic concurrency (BASE-TICK).
+EDIT-SPEC is (:kind full :text NEW-TEXT).  Returns a package: an `applied'
+elisp package (auto path), a `pending' elisp package (review path), or an
+`error' package (unknown-target / stale-buffer / unsupported-kind)."
+  (cm/ai-with-package
+    (let ((buf (cm/ai--resolve-buffer target)))
+      (cond
+       ((not buf)
+        (cm/ai-pkg 'error (list :code 'unknown-target
+                                :message (format "No live buffer for %S" target))))
+       ((not (eq (plist-get edit-spec :kind) 'full))
+        (cm/ai-pkg 'error (list :code 'unsupported-kind
+                                :message (format "Unsupported edit kind: %S"
+                                                 (plist-get edit-spec :kind)))))
+       (t
+        (with-current-buffer buf
+          (if (/= (buffer-chars-modified-tick) base-tick)
+              (cm/ai-pkg 'error (list :code 'stale-buffer
+                                      :message "Buffer changed since read; re-read and retry"
+                                      :expected base-tick
+                                      :actual (buffer-chars-modified-tick)))
+            (let* ((proposed (plist-get edit-spec :text))
+                   (current (buffer-substring-no-properties (point-min) (point-max)))
+                   (stats (cm/ai--diff-stats current proposed))
+                   (decision (cm/ai--apply-decision stats review buffer-read-only)))
+              (if (eq decision 'auto)
+                  (progn
+                    (cm/ai--replace-contents buf proposed)
+                    (cm/ai-pkg 'elisp (list :status 'applied
+                                            :hunks (plist-get stats :hunks)
+                                            :lines (plist-get stats :lines))))
+                ;; Review path is wired in Task 5.
+                (cm/ai-pkg 'error (list :code 'review-not-wired
+                                        :message "Review gate not yet implemented")))))))))))
+
 (provide 'cm-ai-bridge)
 ;;; cm-ai-bridge.el ends here

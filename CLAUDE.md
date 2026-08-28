@@ -488,6 +488,27 @@ For presenting multiple rewrite options, Claude Code writes `~/.emacs-ai/suggest
 }
 ```
 
+### Instance registry — resolving "which Emacs"
+
+Each ephemeral Emacs registers `{project_root, server_name, pid, socket,
+started}` in `~/.emacs-ai/instances/emacs-<PID>.json` on startup
+(`cm-ai-registry.el`, called from the `server` block after `server-start`;
+removed on `kill-emacs`). This retires `~/.emacs-last-used` guessing:
+
+- `emacs-send -e '(expr)'` now resolves the target by the **current project**
+  — the live instance whose `project_root` is an ancestor of `$PWD`
+  (most-specific root, then newest). So a command run anywhere under a repo
+  reaches *that* repo's Emacs with no flags.
+- Escape hatches: `--server <name>` (force one), `--project <dir>` (resolve as
+  if `$PWD` were `<dir>`), `--list` (show live instances), `--dry-run` (print
+  the resolved server-name and exit). Fallback order when no project match:
+  single instance → `~/.emacs-last-used` → rofi.
+- The canonical resolver is `cm/ai-registry-resolve` (elisp, ERT-tested);
+  `scripts/emacs-send` mirrors it in bash (needs `jq`; degrades to the old
+  behavior without it).
+
+Design + plan: `docs/plans/2026-08-28-emacs-agents-bridge-{design,phase1-plan}.md`.
+
 ## Multi-root project search ("Add Folder to Project")
 
 `cm-project-roots.el` (a sibling library loaded from `init.el`, like `jai-ts-mode.el`) adds opt-in commands that run search/navigation across directories listed in a `.project-roots` file at the primary project root. The primary root is implicit; extra dirs are one-per-line (`#` comments, `~`/relative allowed, missing dirs skipped with a warning). `cm/project-roots` is the single source of truth all commands read.

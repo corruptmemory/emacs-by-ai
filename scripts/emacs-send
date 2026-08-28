@@ -22,6 +22,7 @@ set -euo pipefail
 unset ALTERNATE_EDITOR
 
 LAST_USED_FILE="$HOME/.emacs-last-used"
+REGISTRY_DIR="$HOME/.emacs-ai/instances"
 SCRIPT_PATH="$(realpath "$0")"
 INSTALL_DIR="$HOME/.local/bin"
 INSTALL_NAME="emacs-send"
@@ -39,15 +40,24 @@ Usage:
   emacs-send -e '(expr)'         Eval arbitrary elisp
   emacs-send -m <file> ...        Choose target via Rofi menu
   emacs-send -m -e '(expr)'      Choose target via Rofi, then eval
+  emacs-send --server NAME ...    Force a specific server (e.g. emacs-1234)
+  emacs-send --project DIR ...    Resolve target as if run from DIR
+  emacs-send --list               List live registered instances and exit
+  emacs-send --dry-run ...        Print the resolved server name, don't send
   emacs-send --install            Symlink this script into ~/.local/bin
   emacs-send -h | --help          Show this help
 
 Selection logic:
   1. No Emacs running → start one automatically
-  2. -m flag          → always show Rofi picker
-  3. One instance     → use it directly
-  4. Multiple         → read ~/.emacs-last-used
-  5. Stale/missing    → fall back to Rofi
+  2. --server NAME    → use that server (error if not live)
+  3. -m flag          → always show Rofi picker
+  4. Otherwise, project-first:
+       a. Match $PWD (or --project DIR) against the registered project
+          roots in ~/.emacs-ai/instances/*.json (ancestor match, most
+          specific root wins, ties broken by newest) → use it directly
+       b. No project match, one instance     → use it directly
+       c. No project match, multiple         → read ~/.emacs-last-used
+       d. Stale/missing                      → fall back to Rofi
 
 Requires per-instance server-start in your Emacs init (server-name = "emacs-<PID>").
 HELP
@@ -102,6 +112,48 @@ live_servers() {
             # Stale socket for a dead process — clean it up.
             rm -f "$sock"
         fi
+    done
+}
+
+# Resolve target server-name by matching a directory against registered
+# project roots: ancestor match, most-specific root, then newest.  Mirrors
+# cm/ai-registry-resolve.  Requires jq; prints nothing if unavailable/no match.
+resolve_by_project() {
+    local base="${1:-$PWD}"
+    command -v jq >/dev/null 2>&1 || return 0
+    [[ -d "$REGISTRY_DIR" ]] || return 0
+    base="${base%/}/"
+    local best_name="" best_len=-1 best_started=""
+    for f in "$REGISTRY_DIR"/*.json; do
+        [[ -e "$f" ]] || continue
+        local root name pid started len
+        root=$(jq -r '.project_root // empty' "$f" 2>/dev/null) || continue
+        name=$(jq -r '.server_name // empty' "$f" 2>/dev/null)
+        pid=$(jq -r '.pid // empty' "$f" 2>/dev/null)
+        started=$(jq -r '.started // empty' "$f" 2>/dev/null)
+        [[ -n "$root" && -n "$name" && -n "$pid" ]] || continue
+        kill -0 "$pid" 2>/dev/null || continue          # live only
+        [[ "$base" == "$root"* ]] || continue           # ancestor match
+        len=${#root}
+        if (( len > best_len )) || { (( len == best_len )) && [[ "$started" > "$best_started" ]]; }; then
+            best_name="$name"; best_len="$len"; best_started="$started"
+        fi
+    done
+    [[ -n "$best_name" ]] && printf '%s\n' "$best_name"
+}
+
+# Print live registered instances (project_root, server, buffer).
+list_instances() {
+    command -v jq >/dev/null 2>&1 || die "--list requires jq"
+    [[ -d "$REGISTRY_DIR" ]] || { echo "(no instances registered)"; return; }
+    for f in "$REGISTRY_DIR"/*.json; do
+        [[ -e "$f" ]] || continue
+        local root name pid
+        root=$(jq -r '.project_root // "?"' "$f" 2>/dev/null)
+        name=$(jq -r '.server_name // "?"' "$f" 2>/dev/null)
+        pid=$(jq -r '.pid // 0' "$f" 2>/dev/null)
+        kill -0 "$pid" 2>/dev/null || continue
+        printf '%-28s %-14s %s\n' "$name" "(PID $pid)" "$root"
     done
 }
 
@@ -161,6 +213,10 @@ USE_ROFI=false
 EVAL_MODE=false
 EXPR=""
 FILES=()
+SERVER_OVERRIDE=""
+PROJECT_OVERRIDE=""
+LIST_MODE=false
+DRY_RUN=false
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -168,9 +224,18 @@ while [[ $# -gt 0 ]]; do
         --install) do_install ;;
         -m) USE_ROFI=true; shift ;;
         -e) EVAL_MODE=true; EXPR="$2"; shift 2 ;;
+        --server)  SERVER_OVERRIDE="$2"; shift 2 ;;
+        --project) PROJECT_OVERRIDE="$2"; shift 2 ;;
+        --list)    LIST_MODE=true; shift ;;
+        --dry-run) DRY_RUN=true; shift ;;
         *)  FILES+=("$1"); shift ;;
     esac
 done
+
+if $LIST_MODE; then
+    list_instances
+    exit 0
+fi
 
 if ! $EVAL_MODE && [[ ${#FILES[@]} -eq 0 ]]; then
     die "usage: emacs-send [-m] [-e '(expr)' | <file> ...] [--install]"
@@ -186,32 +251,41 @@ if [[ ${#servers[@]} -eq 0 ]]; then
     else
         launch_emacs_with_files "${FILES[@]}"
     fi
+elif [[ -n "$SERVER_OVERRIDE" ]]; then
+    target=""
+    for srv in "${servers[@]}"; do
+        [[ "$srv" == "$SERVER_OVERRIDE" ]] && target="$srv"
+    done
+    [[ -n "$target" ]] || die "--server '$SERVER_OVERRIDE' is not a live instance"
 elif $USE_ROFI; then
     command -v rofi >/dev/null 2>&1 || die "rofi is not installed"
     target=$(rofi_pick "${servers[@]}")
-elif [[ ${#servers[@]} -eq 1 ]]; then
-    target="${servers[0]}"
-elif [[ -f "$LAST_USED_FILE" ]]; then
-    candidate=$(cat "$LAST_USED_FILE")
-    # Verify it's still alive.
-    target=""
-    for srv in "${servers[@]}"; do
-        if [[ "$srv" == "$candidate" ]]; then
-            target="$srv"
-            break
-        fi
-    done
-    if [[ -z "$target" ]]; then
-        # Last-used is stale, fall back to Rofi.
-        command -v rofi >/dev/null 2>&1 || die "multiple instances running and last-used is stale; install rofi or use -m"
-        target=$(rofi_pick "${servers[@]}")
-    fi
 else
-    command -v rofi >/dev/null 2>&1 || die "multiple instances running; install rofi or use -m"
-    target=$(rofi_pick "${servers[@]}")
+    # Project-based resolution first (mirrors cm/ai-registry-resolve).
+    target=$(resolve_by_project "${PROJECT_OVERRIDE:-$PWD}")
+    if [[ -z "$target" ]]; then
+        if [[ ${#servers[@]} -eq 1 ]]; then
+            target="${servers[0]}"
+        elif [[ -f "$LAST_USED_FILE" ]]; then
+            candidate=$(cat "$LAST_USED_FILE")
+            target=""
+            for srv in "${servers[@]}"; do
+                [[ "$srv" == "$candidate" ]] && target="$srv"
+            done
+            if [[ -z "$target" ]]; then
+                command -v rofi >/dev/null 2>&1 || die "multiple instances and last-used is stale; install rofi or use -m/--server"
+                target=$(rofi_pick "${servers[@]}")
+            fi
+        else
+            command -v rofi >/dev/null 2>&1 || die "multiple instances running; install rofi or use -m/--server"
+            target=$(rofi_pick "${servers[@]}")
+        fi
+    fi
 fi
 
 [[ -n "$target" ]] || die "no target selected"
+
+if $DRY_RUN; then echo "$target"; exit 0; fi
 
 # --- send command ---
 

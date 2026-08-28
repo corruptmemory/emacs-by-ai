@@ -12,6 +12,7 @@
 (require 'subr-x)
 (require 'json)
 (require 'server)
+(require 'diff-mode)
 
 (declare-function org-back-to-heading "org")
 (declare-function org-up-heading-safe "org")
@@ -283,8 +284,8 @@ The current line is marked with an arrow."
 
 (defun cm/ai--replace-contents (buf text)
   "Minimally replace BUF's contents with TEXT (preserves point/markers/undo).
-Uses `replace-region-contents' (Emacs 31+) rather than the now-obsolete
-`replace-buffer-contents' — same non-destructive-replacement contract,
+Uses `replace-region-contents' (preferred over the now-31.1-obsolete
+`replace-buffer-contents') — same non-destructive-replacement contract,
 no byte-compile deprecation warning."
   (with-current-buffer buf
     (replace-region-contents (point-min) (point-max) text)))
@@ -321,9 +322,69 @@ elisp package (auto path), a `pending' elisp package (review path), or an
                     (cm/ai-pkg 'elisp (list :status 'applied
                                             :hunks (plist-get stats :hunks)
                                             :lines (plist-get stats :lines))))
-                ;; Review path is wired in Task 5.
-                (cm/ai-pkg 'error (list :code 'review-not-wired
-                                        :message "Review gate not yet implemented")))))))))))
+                (let ((rbuf (cm/ai--make-review-buffer buf proposed base-tick current)))
+                  (cm/ai-pkg 'elisp (list :status 'pending
+                                          :review-buffer (buffer-name rbuf)
+                                          :hunks (plist-get stats :hunks)
+                                          :lines (plist-get stats :lines)))))))))))))
+
+;;;; Review gate — diff-mode buffer + human apply/reject.
+
+(defvar-local cm/ai-edit--target nil "Target buffer for a pending AI edit.")
+(defvar-local cm/ai-edit--proposed nil "Proposed full text for a pending AI edit.")
+(defvar-local cm/ai-edit--base-tick nil "Buffer tick captured when the edit was proposed.")
+
+(defvar cm/ai-edit-review-mode-map
+  (let ((m (make-sparse-keymap)))
+    (set-keymap-parent m diff-mode-map)
+    (define-key m (kbd "C-c C-c") #'cm/ai-edit-apply)
+    (define-key m (kbd "C-c C-k") #'cm/ai-edit-reject)
+    m)
+  "Keymap for the AI edit review buffer.")
+
+(defun cm/ai--make-review-buffer (buf proposed base-tick current)
+  "Create and display a review buffer diffing CURRENT vs PROPOSED for BUF.
+Returns the review buffer."
+  (let* ((name (format "*ai-edit:%s*" (buffer-name buf)))
+         (rbuf (get-buffer-create name)))
+    (with-current-buffer rbuf
+      (let ((inhibit-read-only t))
+        (erase-buffer)
+        (insert (cm/ai--unified-diff current proposed)))
+      (goto-char (point-min))
+      (diff-mode)
+      (use-local-map cm/ai-edit-review-mode-map)
+      (setq buffer-read-only t
+            cm/ai-edit--target buf
+            cm/ai-edit--proposed proposed
+            cm/ai-edit--base-tick base-tick)
+      (setq header-line-format
+            (substitute-command-keys
+             "AI edit — \\[cm/ai-edit-apply] apply · \\[cm/ai-edit-reject] reject")))
+    (display-buffer rbuf)
+    rbuf))
+
+(defun cm/ai-edit-apply ()
+  "Apply the pending AI edit shown in this review buffer to its target."
+  (interactive)
+  (let ((buf cm/ai-edit--target)
+        (proposed cm/ai-edit--proposed)
+        (base-tick cm/ai-edit--base-tick))
+    (unless (buffer-live-p buf) (user-error "Target buffer is gone"))
+    (with-current-buffer buf
+      (when (/= (buffer-chars-modified-tick) base-tick)
+        (user-error "Target changed since the edit was proposed; not applying")))
+    (cm/ai--replace-contents buf proposed)
+    (let ((n (buffer-name buf)))
+      (kill-buffer (current-buffer))
+      (message "AI edit applied to %s" n))))
+
+(defun cm/ai-edit-reject ()
+  "Discard the pending AI edit shown in this review buffer."
+  (interactive)
+  (let ((n (and (buffer-live-p cm/ai-edit--target) (buffer-name cm/ai-edit--target))))
+    (kill-buffer (current-buffer))
+    (message "AI edit rejected%s" (if n (format " for %s" n) ""))))
 
 (provide 'cm-ai-bridge)
 ;;; cm-ai-bridge.el ends here

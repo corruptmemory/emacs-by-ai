@@ -142,5 +142,38 @@
     (should (eq (plist-get p :type) 'error))
     (should (eq (plist-get (plist-get p :payload) :code) 'unknown-target))))
 
+(ert-deftest cm/ai-apply-edit-review-returns-pending ()
+  (with-temp-buffer
+    (insert "a\nb\nc\nd\ne\nf\ng\nh\ni\nj\n") (rename-buffer "cm-ai-rev" t)
+    (let* ((tick (buffer-chars-modified-tick))
+           ;; force review regardless of size
+           (p (cm/ai-apply-edit (buffer-name) tick
+                                '(:kind full :text "A\nB\nc\nd\ne\nf\ng\nh\ni\nj\n") 'force))
+           (pl (plist-get p :payload)))
+      (should (eq (plist-get p :type) 'elisp))
+      (should (eq (plist-get pl :status) 'pending))
+      (let ((rbuf (get-buffer (plist-get pl :review-buffer))))
+        (should (buffer-live-p rbuf))
+        ;; buffer still unchanged until the human applies
+        (should (equal (buffer-substring-no-properties (point-min) (point-max))
+                       "a\nb\nc\nd\ne\nf\ng\nh\ni\nj\n"))
+        ;; apply it and confirm the target changes
+        (with-current-buffer rbuf (cm/ai-edit-apply))
+        (should (equal (buffer-substring-no-properties (point-min) (point-max))
+                       "A\nB\nc\nd\ne\nf\ng\nh\ni\nj\n"))))))
+
+(ert-deftest cm/ai-edit-apply-refuses-stale ()
+  (with-temp-buffer
+    (insert "orig\n") (rename-buffer "cm-ai-rev2" t)
+    (let* ((tick (buffer-chars-modified-tick))
+           (p (cm/ai-apply-edit (buffer-name) tick '(:kind full :text "new\n") 'force))
+           (rbuf (get-buffer (plist-get (plist-get p :payload) :review-buffer))))
+      ;; mutate the target after the review was created -> apply must refuse
+      (insert "sneaky\n")
+      (with-current-buffer rbuf
+        (should-error (cm/ai-edit-apply) :type 'user-error))
+      ;; target keeps its (mutated) content, edit not applied
+      (should (string-match-p "sneaky" (buffer-string))))))
+
 (provide 'cm-ai-bridge-tests)
 ;;; cm-ai-bridge-tests.el ends here

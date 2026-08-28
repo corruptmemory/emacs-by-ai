@@ -101,7 +101,8 @@
     (let ((p (cm/ai-current-context (buffer-name) :as 'json)))
       (should (eq (plist-get p :type) 'json))
       (should (stringp (plist-get p :payload)))
-      (should (string-match-p "cm-ai-json" (plist-get p :payload))))))
+      (should (string-match-p "cm-ai-json" (plist-get p :payload)))
+      (should (integerp (plist-get (plist-get p :meta) :tick))))))
 
 (provide 'cm-ai-bridge-tests)
 ;;; cm-ai-bridge-tests.el ends here

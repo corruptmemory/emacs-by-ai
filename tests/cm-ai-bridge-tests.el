@@ -27,10 +27,15 @@
         (progn
           (should (eq (cm/ai--resolve-buffer "cm-ai-t-buf") buf))
           (should (null (cm/ai--resolve-buffer "no-such-buffer-xyz")))
-          (with-current-buffer buf
-            ;; nil target = current/focused; in batch, selected-window's buffer
-            (should (bufferp (cm/ai--resolve-buffer nil)))))
-      (kill-buffer buf))))
+          (should (eq (cm/ai--resolve-buffer nil) (window-buffer (selected-window)))))
+      (kill-buffer buf)))
+  ;; Test file-path resolution via find-buffer-visiting
+  (let* ((tmp (make-temp-file "cm-ai-rb"))
+         (fbuf (find-file-noselect tmp)))
+    (unwind-protect
+        (should (eq (cm/ai--resolve-buffer tmp) fbuf))
+      (kill-buffer fbuf)
+      (delete-file tmp))))
 
 (provide 'cm-ai-bridge-tests)
 ;;; cm-ai-bridge-tests.el ends here

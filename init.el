@@ -218,7 +218,7 @@ image-only clipboard (which would emit \"couldn't convert\" chatter)."
   ;; last-used.  See cm-ai-registry.el and
   ;; docs/plans/2026-08-28-emacs-agents-bridge-design.md (Section A).
   (when (load (locate-user-emacs-file "cm-ai-registry") t)
-    (cm/ai-registry-register))
+    (with-demoted-errors "cm-ai-registry: %S" (cm/ai-registry-register)))
   (defvar cm/last-used-file (expand-file-name "~/.emacs-last-used")
     "File recording the server-name of the most recently focused Emacs.")
   (defun cm/record-last-used-emacs ()

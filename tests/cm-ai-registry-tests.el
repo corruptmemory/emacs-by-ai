@@ -86,5 +86,20 @@
     ;; cwd outside every project_root -> nil
     (should-not (cm/ai-registry-resolve "/tmp/unrelated" only-13-live))))
 
+(ert-deftest cm/ai-registry-resolve-skips-malformed-descriptor ()
+  (let* ((dir (file-name-as-directory (make-temp-file "cmair" t)))
+         (cm/ai-registry-dir dir)
+         (all-live (lambda (_pid) t))
+         (bad-file (expand-file-name "emacs-bad.json" dir)))
+    ;; A malformed/half-written descriptor sits alongside a valid one — the
+    ;; concurrency contract is that a bad file is skipped, not fatal.
+    (with-temp-file bad-file (insert "{ not json"))
+    (cm/ai-registry--write '((server_name . "emacs-20") (pid . 20)
+                             (project_root . "/home/jim/projects/app/")
+                             (started . "2026-08-28T10:00:00+0000")) dir)
+    (should-not (cm/ai-registry--read bad-file))
+    (should (equal (cm/ai-registry-resolve "/home/jim/projects/app/x" all-live)
+                   "emacs-20"))))
+
 (provide 'cm-ai-registry-tests)
 ;;; cm-ai-registry-tests.el ends here

@@ -491,7 +491,7 @@ For presenting multiple rewrite options, Claude Code writes `~/.emacs-ai/suggest
 ### Instance registry — resolving "which Emacs"
 
 Each ephemeral Emacs registers `{project_root, server_name, pid, socket,
-started}` in `~/.emacs-ai/instances/emacs-<PID>.json` on startup
+frame_title, started}` in `~/.emacs-ai/instances/emacs-<PID>.json` on startup
 (`cm-ai-registry.el`, called from the `server` block after `server-start`;
 removed on `kill-emacs`). This retires `~/.emacs-last-used` guessing:
 

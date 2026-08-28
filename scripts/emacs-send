@@ -139,7 +139,8 @@ resolve_by_project() {
             best_name="$name"; best_len="$len"; best_started="$started"
         fi
     done
-    [[ -n "$best_name" ]] && printf '%s\n' "$best_name"
+    if [[ -n "$best_name" ]]; then printf '%s\n' "$best_name"; fi
+    return 0
 }
 
 # Print live registered instances (project_root, server, buffer).
@@ -155,6 +156,7 @@ list_instances() {
         kill -0 "$pid" 2>/dev/null || continue
         printf '%-28s %-14s %s\n' "$name" "(PID $pid)" "$root"
     done
+    return 0
 }
 
 # Query an Emacs instance for its current buffer name.
@@ -246,6 +248,7 @@ fi
 mapfile -t servers < <(live_servers)
 
 if [[ ${#servers[@]} -eq 0 ]]; then
+    $DRY_RUN && { echo "(no running Emacs)"; exit 0; }
     if $EVAL_MODE; then
         launch_emacs_with_elisp "$EXPR"
     else

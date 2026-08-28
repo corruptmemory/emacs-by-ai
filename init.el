@@ -2152,16 +2152,19 @@ independently without cross-contamination."
 ;;   C-c a d   diff current text against AI suggestion
 ;;
 ;; Remote query (Claude Code calls via emacsclient -e):
-;;   (cm/ai-current-context)             → JSON: file, mode, line, region, etc.
-;;   (cm/ai-visible-buffers)             → JSON array of all visible buffers
-;;   (cm/ai-get-content)                 → snapshot focused buffer → exchange dir
-;;   (cm/ai-get-content "buf-name")      → snapshot named buffer → exchange dir
-;;   (cm/ai-paragraph-at-point)          → text of paragraph at point
-;;   (cm/ai-line-at-point)               → text of current line
-;;   (cm/ai-region-or-paragraph)         → JSON: region if active, else paragraph
-;;   (cm/ai-org-subtree-at-point)        → org subtree text (nil if not org-mode)
-;;   (cm/ai-nearby-lines)                → ±5 lines around point with → marker
-;;   (cm/ai-nearby-lines N)              → ±N lines around point
+;;   (cm/ai-current-context)             → elisp/text/ref/error package (see cm-ai-bridge.el)
+;;   (cm/ai-visible-buffers)             → elisp/text/ref/error package (see cm-ai-bridge.el)
+;;   (cm/ai-get-content)                 → elisp/text/ref/error package (see cm-ai-bridge.el)
+;;   (cm/ai-get-content "buf-name")      → elisp/text/ref/error package (see cm-ai-bridge.el)
+;;   (cm/ai-paragraph-at-point)          → elisp/text/ref/error package (see cm-ai-bridge.el)
+;;   (cm/ai-line-at-point)               → elisp/text/ref/error package (see cm-ai-bridge.el)
+;;   (cm/ai-region-or-paragraph)         → elisp/text/ref/error package (see cm-ai-bridge.el)
+;;   (cm/ai-org-subtree-at-point)        → elisp/text/ref/error package (see cm-ai-bridge.el)
+;;   (cm/ai-nearby-lines)                → elisp/text/ref/error package (see cm-ai-bridge.el)
+;;   (cm/ai-nearby-lines N)              → elisp/text/ref/error package (see cm-ai-bridge.el)
+;;   Each also takes an optional TARGET (buffer name or file path) and a
+;;   :as 'json keyword to re-render as a `json' package, e.g.
+;;   (cm/ai-current-context "some-buffer" :as 'json).
 ;;
 ;; File exchange:
 ;;   ~/.emacs-ai/context.json   metadata (written by share/get-content)
@@ -2172,143 +2175,6 @@ independently without cross-contamination."
 ;; Non-interactive core (packages protocol, shared helpers, remote reads, write
 ;; path) lives in cm-ai-bridge.el; the interactive commands below load it first.
 (load (locate-user-emacs-file "cm-ai-bridge") t)
-
-;;;; Remote-query functions — called by Claude Code via emacsclient -e.
-;; These let the AI inspect Emacs state without the user pressing anything.
-
-(defun cm/ai-current-context ()
-  "Return JSON string describing the focused buffer's editing context.
-Designed for `emacsclient -s <server> -e \\='(cm/ai-current-context)\\=''.
-Returns file path, mode, cursor position, active region bounds, etc."
-  (let* ((win (selected-window))
-         (buf (window-buffer win)))
-    (with-current-buffer buf
-      (let* ((region-p (use-region-p))
-             (context
-              `((file . ,(or (buffer-file-name) ""))
-                (buffer . ,(buffer-name))
-                (mode . ,(symbol-name major-mode))
-                (line . ,(line-number-at-pos))
-                (column . ,(current-column))
-                (org-path . ,(or (cm/ai--org-heading-path) []))
-                (modified . ,(if (buffer-modified-p) t :json-false))
-                (server . ,(or (cm/ai--server-name) ""))
-                (region . ,(if region-p
-                               `((start-line . ,(line-number-at-pos (region-beginning)))
-                                 (end-line . ,(line-number-at-pos (region-end)))
-                                 (chars . ,(- (region-end) (region-beginning))))
-                             :json-false))
-                (timestamp . ,(format-time-string "%Y-%m-%dT%H:%M:%S")))))
-        (json-encode context)))))
-
-(defun cm/ai-visible-buffers ()
-  "Return JSON array describing all visible buffers across frames.
-Designed for `emacsclient -e' — lets AI see what windows are open."
-  (let (result)
-    (walk-windows
-     (lambda (win)
-       (let ((buf (window-buffer win)))
-         (push `((file . ,(or (buffer-file-name buf) ""))
-                 (buffer . ,(buffer-name buf))
-                 (mode . ,(symbol-name (buffer-local-value 'major-mode buf)))
-                 (selected . ,(if (eq win (selected-window)) t :json-false)))
-               result)))
-     nil t)
-    (json-encode (nreverse result))))
-
-(defun cm/ai-get-content (&optional buffer-name-or-nil)
-  "Snapshot buffer content to exchange dir; return context as JSON string.
-Without BUFFER-NAME-OR-NIL, uses the focused window's buffer.
-If the buffer has an active region, only that text is captured.
-Writes content.txt and context.json to `cm/ai-exchange-dir'.
-Designed for `emacsclient -e \\='(cm/ai-get-content)\\='' or
-`emacsclient -e \\='(cm/ai-get-content \"some-buffer\")\\=''."
-  (cm/ai--ensure-dir)
-  (let* ((buf (if buffer-name-or-nil
-                  (or (get-buffer buffer-name-or-nil)
-                      (error "No buffer named %s" buffer-name-or-nil))
-                (window-buffer (selected-window)))))
-    (with-current-buffer buf
-      (let* ((region-p (use-region-p))
-             (content (if region-p
-                          (buffer-substring-no-properties (region-beginning) (region-end))
-                        (buffer-substring-no-properties (point-min) (point-max))))
-             (scope (if region-p "region" "buffer"))
-             (context
-              `((file . ,(or (buffer-file-name) ""))
-                (buffer . ,(buffer-name))
-                (mode . ,(symbol-name major-mode))
-                (line . ,(line-number-at-pos))
-                (column . ,(current-column))
-                (scope . ,scope)
-                (org-path . ,(or (cm/ai--org-heading-path) []))
-                (modified . ,(if (buffer-modified-p) t :json-false))
-                (server . ,(or (cm/ai--server-name) ""))
-                (timestamp . ,(format-time-string "%Y-%m-%dT%H:%M:%S"))
-                (chars . ,(length content)))))
-        (with-temp-file (expand-file-name "content.txt" cm/ai-exchange-dir)
-          (insert content))
-        (let ((json (json-encode context)))
-          (with-temp-file (expand-file-name "context.json" cm/ai-exchange-dir)
-            (insert json))
-          json)))))
-
-(defun cm/ai-paragraph-at-point ()
-  "Return the paragraph surrounding point in the focused buffer.
-Does not disturb point, mark, or region."
-  (with-current-buffer (window-buffer (selected-window))
-    (save-excursion
-      (let ((beg (progn (backward-paragraph) (skip-chars-forward "\n") (point)))
-            (end (progn (forward-paragraph) (skip-chars-backward "\n") (point))))
-        (buffer-substring-no-properties beg end)))))
-
-(defun cm/ai-line-at-point ()
-  "Return the current line in the focused buffer."
-  (with-current-buffer (window-buffer (selected-window))
-    (buffer-substring-no-properties (line-beginning-position) (line-end-position))))
-
-(defun cm/ai-region-or-paragraph ()
-  "Return active region text if any, otherwise the paragraph at point.
-Returns a JSON object with `scope' (\"region\" or \"paragraph\") and `text'."
-  (with-current-buffer (window-buffer (selected-window))
-    (let* ((region-p (use-region-p))
-           (text (if region-p
-                     (buffer-substring-no-properties (region-beginning) (region-end))
-                   (save-excursion
-                     (let ((beg (progn (backward-paragraph)
-                                       (skip-chars-forward "\n") (point)))
-                           (end (progn (forward-paragraph)
-                                       (skip-chars-backward "\n") (point))))
-                       (buffer-substring-no-properties beg end))))))
-      (json-encode `((scope . ,(if region-p "region" "paragraph"))
-                     (text . ,text)
-                     (chars . ,(length text)))))))
-
-(defun cm/ai-org-subtree-at-point ()
-  "Return the org subtree at point, or nil if not in `org-mode'."
-  (with-current-buffer (window-buffer (selected-window))
-    (when (derived-mode-p 'org-mode)
-      (save-excursion
-        (org-back-to-heading t)
-        (let ((beg (point)))
-          (org-end-of-subtree t t)
-          (buffer-substring-no-properties beg (point)))))))
-
-(defun cm/ai-nearby-lines (&optional n)
-  "Return N lines above and below point (default 5) with a → marker on the current line."
-  (with-current-buffer (window-buffer (selected-window))
-    (let* ((n (or n 5))
-           (cur (line-number-at-pos))
-           (beg (save-excursion (forward-line (- n)) (point)))
-           (end (save-excursion (forward-line (1+ n)) (point)))
-           (lines (split-string (buffer-substring-no-properties beg end) "\n"))
-           (start-line (- cur n))
-           (result '()))
-      (dotimes (i (length lines))
-        (let* ((lnum (+ start-line i))
-               (prefix (if (= lnum cur) "→" " ")))
-          (push (format "%s %4d: %s" prefix lnum (nth i lines)) result)))
-      (mapconcat #'identity (nreverse result) "\n"))))
 
 (defun cm/ai-share (&optional arg)
   "Share current editing context with AI assistant.

@@ -54,5 +54,54 @@
   (let ((server-name "emacs-777"))
     (should (equal (cm/ai--server-name) "emacs-777"))))
 
+(ert-deftest cm/ai-current-context-package ()
+  (with-temp-buffer
+    (insert "line one\nline two\n") (goto-char (point-min))
+    (rename-buffer "cm-ai-ctx" t)
+    (let* ((p (cm/ai-current-context (buffer-name)))
+           (pl (plist-get p :payload)))
+      (should (eq (plist-get p :type) 'elisp))
+      (should (equal (plist-get pl :buffer) "cm-ai-ctx"))
+      (should (equal (plist-get pl :line) 1))
+      ;; base-tick is exposed in meta for the write path
+      (should (integerp (plist-get (plist-get p :meta) :tick))))))
+
+(ert-deftest cm/ai-line-at-point-text-package ()
+  (with-temp-buffer
+    (insert "alpha\nbeta\n") (goto-char (point-min)) (rename-buffer "cm-ai-line" t)
+    (let ((p (cm/ai-line-at-point (buffer-name))))
+      (should (eq (plist-get p :type) 'text))
+      (should (equal (plist-get p :payload) "alpha")))))
+
+(ert-deftest cm/ai-org-subtree-not-org-is-error ()
+  (with-temp-buffer
+    (fundamental-mode) (rename-buffer "cm-ai-noorg" t)
+    (let ((p (cm/ai-org-subtree-at-point (buffer-name))))
+      (should (eq (plist-get p :type) 'error))
+      (should (eq (plist-get (plist-get p :payload) :code) 'not-org-mode)))))
+
+(ert-deftest cm/ai-get-content-is-ref ()
+  (let ((cm/ai-exchange-dir (file-name-as-directory (make-temp-file "cmaix" t))))
+    (with-temp-buffer
+      (insert "body text") (rename-buffer "cm-ai-gc" t)
+      (let* ((p (cm/ai-get-content (buffer-name)))
+             (pl (plist-get p :payload)))
+        (should (eq (plist-get p :type) 'ref))
+        (should (file-exists-p (plist-get pl :path)))
+        (should (equal (plist-get (plist-get p :meta) :buffer) "cm-ai-gc"))))))
+
+(ert-deftest cm/ai-unknown-target-is-error ()
+  (let ((p (cm/ai-current-context "no-such-buffer-xyz")))
+    (should (eq (plist-get p :type) 'error))
+    (should (eq (plist-get (plist-get p :payload) :code) 'unknown-target))))
+
+(ert-deftest cm/ai-json-rendering-on-request ()
+  (with-temp-buffer
+    (insert "x") (rename-buffer "cm-ai-json" t)
+    (let ((p (cm/ai-current-context (buffer-name) :as 'json)))
+      (should (eq (plist-get p :type) 'json))
+      (should (stringp (plist-get p :payload)))
+      (should (string-match-p "cm-ai-json" (plist-get p :payload))))))
+
 (provide 'cm-ai-bridge-tests)
 ;;; cm-ai-bridge-tests.el ends here

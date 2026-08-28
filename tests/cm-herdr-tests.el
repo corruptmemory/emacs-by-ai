@@ -55,5 +55,47 @@
       (should (equal (plist-get p :project_root) "/home/jim/projects/emacs-again/"))
       (should (equal (plist-get p :protocol) 1)))))
 
+(ert-deftest cm/herdr-push-ok-p ()
+  (should (cm/ai-herdr--push-ok-p '(:exit 0 :output "{\"type\":\"agent_prompted\"}")))
+  (should-not (cm/ai-herdr--push-ok-p '(:exit 0 :output "{\"error\":\"agent_blocked\"}")))
+  (should-not (cm/ai-herdr--push-ok-p '(:exit 1 :output ""))))
+
+(ert-deftest cm/herdr-bind-agent-pushes-handshake ()
+  ;; Stub the shell + UI: agent list from fixture, pick the working one, capture the push.
+  (let (captured)
+    (cl-letf (((symbol-function 'cm/ai-herdr--available-p) (lambda () t))
+              ((symbol-function 'cm/ai-herdr--agent-list)
+               (lambda () (cm/ai-herdr--parse-agent-list cm/herdr-test--fixture)))
+              ((symbol-function 'cm/ai-herdr--this-emacs-descriptor)
+               (lambda () '((server_name . "emacs-4242")
+                            (socket . "/run/user/1000/emacs/emacs-4242")
+                            (project_root . "/home/jim/projects/emacs-again/"))))
+              ((symbol-function 'completing-read)
+               (lambda (_p _c &rest _) "claude · emacs-again · working · wH:p1"))
+              ((symbol-function 'cm/ai-herdr--push)
+               (lambda (pane text) (setq captured (list pane text))
+                 '(:exit 0 :output "{\"type\":\"agent_prompted\"}"))))
+      (cm/ai-bind-agent)
+      (should (equal (car captured) "wH:p1"))
+      (should (string-prefix-p "[emacs-bridge] connect " (cadr captured)))
+      (should (string-match-p "emacs-4242" (cadr captured))))))
+
+(ert-deftest cm/herdr-bind-agent-blocked-confirm-declined ()
+  ;; A blocked target with the user declining the y-or-n-p must NOT push.
+  (let ((pushed nil)
+        (blocked-fixture
+         (concat "{\"result\":{\"agents\":[{\"agent\":\"claude\",\"agent_status\":\"blocked\","
+                 "\"cwd\":\"/x\",\"pane_id\":\"wZ:p1\"}]}}")))
+    (cl-letf (((symbol-function 'cm/ai-herdr--available-p) (lambda () t))
+              ((symbol-function 'cm/ai-herdr--agent-list)
+               (lambda () (cm/ai-herdr--parse-agent-list blocked-fixture)))
+              ((symbol-function 'cm/ai-herdr--this-emacs-descriptor)
+               (lambda () '((server_name . "e") (socket . "s") (project_root . "/x/"))))
+              ((symbol-function 'completing-read) (lambda (&rest _) "claude · x · blocked · wZ:p1"))
+              ((symbol-function 'y-or-n-p) (lambda (&rest _) nil))
+              ((symbol-function 'cm/ai-herdr--push) (lambda (&rest _) (setq pushed t) '(:exit 0 :output ""))))
+      (should-error (cm/ai-bind-agent) :type 'user-error)
+      (should-not pushed))))
+
 (provide 'cm-herdr-tests)
 ;;; cm-herdr-tests.el ends here

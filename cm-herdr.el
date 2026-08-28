@@ -66,5 +66,56 @@
                    (lambda (a b) (and (cm/ai-herdr--cwd-match-p a this-root)
                                        (not (cm/ai-herdr--cwd-match-p b this-root))))))
 
+(defun cm/ai-herdr--run (&rest args)
+  "Run the herdr CLI with ARGS; return (:exit N :output STR).
+Sets HERDR_ENV=1 as insurance (the 0.8.2 server accepts a
+context-less client)."
+  (with-temp-buffer
+    (let* ((process-environment (cons "HERDR_ENV=1" process-environment))
+           (exit (apply #'call-process cm/ai-herdr-executable nil t nil args)))
+      (list :exit exit :output (buffer-string)))))
+
+(defun cm/ai-herdr--agent-list ()
+  "Return the live herdr agent list as plists, or nil on failure."
+  (when (cm/ai-herdr--available-p)
+    (let ((res (cm/ai-herdr--run "agent" "list")))
+      (when (= 0 (plist-get res :exit))
+        (ignore-errors (cm/ai-herdr--parse-agent-list (plist-get res :output)))))))
+
+(defun cm/ai-herdr--push (pane text)
+  "Push TEXT to the herdr agent at PANE via `agent prompt'.
+Return (:exit :output)."
+  (cm/ai-herdr--run "agent" "prompt" pane text))
+
+(defun cm/ai-herdr--push-ok-p (result)
+  "Non-nil if a `cm/ai-herdr--push' RESULT indicates success."
+  (and (= 0 (plist-get result :exit))
+       (string-match-p "agent_prompted" (or (plist-get result :output) ""))))
+
+;;;###autoload
+(defun cm/ai-bind-agent ()
+  "Pick a running herdr agent and push this Emacs's socket handshake to it."
+  (interactive)
+  (unless (cm/ai-herdr--available-p)
+    (user-error "herdr not found on PATH"))
+  (let ((agents (cm/ai-herdr--agent-list)))
+    (unless agents (user-error "No herdr agents found"))
+    (let* ((sorted (cm/ai-herdr--sort-agents agents (cm/ai-herdr--this-project-root)))
+           (cands (mapcar (lambda (a) (cons (cm/ai-herdr--candidate-label a) a)) sorted))
+           (choice (completing-read "Bind agent: " (mapcar #'car cands) nil t))
+           (agent (cdr (assoc choice cands)))
+           (pane (plist-get agent :pane_id))
+           (status (plist-get agent :agent_status)))
+      (when (and (equal status "blocked")
+                 (not (y-or-n-p
+                       (format "Agent %s is blocked; `agent prompt' may be rejected. Push anyway? "
+                               pane))))
+        (user-error "Aborted"))
+      (let* ((payload (cm/ai-herdr--handshake-payload (cm/ai-herdr--this-emacs-descriptor)))
+             (result (cm/ai-herdr--push pane payload)))
+        (if (cm/ai-herdr--push-ok-p result)
+            (message "cm/ai-bind-agent: pushed emacs-bridge handshake to %s" pane)
+          (message "cm/ai-bind-agent: push to %s failed (%S)" pane result))))))
+
 (provide 'cm-herdr)
 ;;; cm-herdr.el ends here

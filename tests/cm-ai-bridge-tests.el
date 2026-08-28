@@ -37,5 +37,22 @@
       (kill-buffer fbuf)
       (delete-file tmp))))
 
+(ert-deftest cm/ai-pkg-ref-writes-file ()
+  (let* ((cm/ai-exchange-dir (file-name-as-directory (make-temp-file "cmaix" t)))
+         (p (cm/ai--pkg-ref "hello world" :buffer "x")))
+    (should (eq (plist-get p :type) 'ref))
+    (let ((pl (plist-get p :payload)))
+      (should (eq (plist-get pl :of) 'text))
+      (should (= (plist-get pl :bytes) (string-bytes "hello world")))
+      (should (file-exists-p (plist-get pl :path)))
+      (should (equal (with-temp-buffer (insert-file-contents (plist-get pl :path))
+                       (buffer-string))
+                     "hello world")))
+    (should (equal (plist-get p :meta) '(:buffer "x")))))
+
+(ert-deftest cm/ai-server-name-helper ()
+  (let ((server-name "emacs-777"))
+    (should (equal (cm/ai--server-name) "emacs-777"))))
+
 (provide 'cm-ai-bridge-tests)
 ;;; cm-ai-bridge-tests.el ends here

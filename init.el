@@ -2169,30 +2169,9 @@ independently without cross-contamination."
 ;;   ~/.emacs-ai/suggestion.txt AI suggestion (read by accept/diff)
 ;;   Or: edit the file directly (auto-revert picks it up)
 
-(defvar cm/ai-exchange-dir (expand-file-name "~/.emacs-ai/")
-  "Directory for AI <-> Emacs file exchange.")
-
-(defun cm/ai--ensure-dir ()
-  "Create exchange directory if needed."
-  (make-directory cm/ai-exchange-dir t))
-
-(defun cm/ai--org-heading-path ()
-  "Return breadcrumb list of org headings from root to point."
-  (when (derived-mode-p 'org-mode)
-    (save-excursion
-      (let (path)
-        (condition-case nil
-            (while t
-              (org-back-to-heading t)
-              (push (substring-no-properties (org-get-heading t t t t)) path)
-              (unless (org-up-heading-safe)
-                (signal 'error nil)))
-          (error nil))
-        path))))
-
-(defun cm/ai--server-name ()
-  "Return the current Emacs server name, or nil."
-  (and (boundp 'server-name) server-name))
+;; Non-interactive core (packages protocol, shared helpers, remote reads, write
+;; path) lives in cm-ai-bridge.el; the interactive commands below load it first.
+(load (locate-user-emacs-file "cm-ai-bridge") t)
 
 ;;;; Remote-query functions — called by Claude Code via emacsclient -e.
 ;; These let the AI inspect Emacs state without the user pressing anything.

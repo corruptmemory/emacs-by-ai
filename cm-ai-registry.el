@@ -10,6 +10,7 @@
 (require 'json)
 (require 'cl-lib)
 
+(declare-function project-root "project")
 (defvar server-name nil)
 
 (defgroup cm/ai-registry nil "Per-instance Emacs registry." :group 'tools)

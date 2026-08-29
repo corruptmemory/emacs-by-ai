@@ -555,6 +555,30 @@ a saved-clean file just edit the file directly and auto-revert picks it up):
 
 Design: `docs/plans/2026-08-28-emacs-agents-bridge-{design,phase2-plan}.md`.
 
+### herdr bind/push — cm/ai-bind-agent + the [emacs-bridge] contract (cm-herdr.el)
+
+`M-x cm/ai-bind-agent` (`C-c a b`) lists the running herdr-managed agents
+(`herdr agent list`), lets Jim pick one (cwd-matching agent floated to the top),
+and pushes this Emacs's socket handshake into that agent's input via
+`herdr agent prompt <pane> …`. It is the explicit / cross-project complement to
+Phase 1's automatic same-project registry. Degrades to a `user-error` if `herdr`
+isn't on PATH; a `blocked` target prompts for confirmation (a blocked agent
+rejects `agent prompt`).
+
+**Agent-side contract (honor this in any Claude session):** when your input
+contains a line
+
+    [emacs-bridge] connect {"server_name":"emacs-<PID>","socket":"…","project_root":"…","protocol":1}
+
+it means an Emacs is granting you a direct line back to it. Record the
+`server_name`, and thereafter talk to THAT specific Emacs with
+`emacsclient -s <server_name> -e '(…)'` (or `emacs-send --server <server_name> -e
+'(…)'`) — using the packages protocol / write path from cm-ai-bridge.el. This is
+how a cross-project bind reaches the right Emacs when the project registry alone
+wouldn't resolve it.
+
+Design + plan: `docs/plans/2026-08-28-emacs-agents-bridge-{design,phase3-plan}.md`.
+
 ## Multi-root project search ("Add Folder to Project")
 
 `cm-project-roots.el` (a sibling library loaded from `init.el`, like `jai-ts-mode.el`) adds opt-in commands that run search/navigation across directories listed in a `.project-roots` file at the primary project root. The primary root is implicit; extra dirs are one-per-line (`#` comments, `~`/relative allowed, missing dirs skipped with a warning). `cm/project-roots` is the single source of truth all commands read.

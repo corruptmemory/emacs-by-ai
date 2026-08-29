@@ -2150,6 +2150,7 @@ independently without cross-contamination."
 ;;   C-c a s   share buffer, region, or org subtree (C-u) with AI
 ;;   C-c a a   accept/apply AI suggestion at point or region
 ;;   C-c a d   diff current text against AI suggestion
+;;   C-c a b   pick a herdr agent, push this Emacs's socket to it
 ;;
 ;; Remote query (Claude Code calls via emacsclient -e):
 ;;   (cm/ai-current-context)             → elisp/text/ref/error package (see cm-ai-bridge.el)
@@ -2256,6 +2257,10 @@ The suggestion file is deleted after application."
 (define-key cm/ai-map (kbd "a") #'cm/ai-accept)
 (define-key cm/ai-map (kbd "d") #'cm/ai-diff)
 (define-key cm/ai-map (kbd "S") #'cm/ai-show-suggestions)
+
+;; herdr bind/push layer — M-x cm/ai-bind-agent (see cm-herdr.el).
+(when (load (locate-user-emacs-file "cm-herdr") t)
+  (define-key cm/ai-map (kbd "b") #'cm/ai-bind-agent))  ; C-c a b
 
 ;;;; Interactive suggestions buffer.
 ;; Reads ~/.emacs-ai/suggestions.json (written by Claude Code) and presents

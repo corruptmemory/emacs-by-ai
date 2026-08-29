@@ -563,7 +563,26 @@ and pushes this Emacs's socket handshake into that agent's input via
 `herdr agent prompt <pane> …`. It is the explicit / cross-project complement to
 Phase 1's automatic same-project registry. Degrades to a `user-error` if `herdr`
 isn't on PATH; a `blocked` target prompts for confirmation (a blocked agent
-rejects `agent prompt`).
+rejects `agent prompt`). The chosen agent is **remembered** instance-globally in
+`cm/ai-bound-agent`, so this Emacs is now *paired* with it.
+
+**The bound-agent session layer** (once bound, operate on the pairing — each
+`user-error`s "run cm/ai-bind-agent first" if nothing is bound):
+- `cm/ai-agent-push` (`C-c a p`) — push the region (if active) or a prompted
+  string to the bound agent's input (`herdr agent prompt`).
+- `cm/ai-agent-read` — dump the bound agent's recent pane output into
+  `*ai-agent:<pane>*`.
+- `cm/ai-agent-status` — re-query `herdr agent list` and echo the bound agent's
+  live state (vs. the mode-line's bind-time snapshot).
+- `cm/ai-unbind-agent` — clear the pairing.
+
+A persistent **mode-line indicator** shows the pairing: `agent:<kind>@<project>`
+(e.g. `agent:claude@emacs-again`) when bound, dim `agent:—` when not; the exact
+herdr pane id + live status + cwd sit in the hover tooltip. It is a `:eval` of
+`cm/ai-bound-agent`, so it can never drift from the actual binding. The binding
+is per-Emacs-process (a plain `defvar`), so different instances pair
+independently. Deferred fast-follow: `cm/ai-agent-wait` (async
+`herdr agent wait --until blocked,done` — block until the agent needs you).
 
 **Agent-side contract (honor this in any Claude session):** when your input
 contains a line

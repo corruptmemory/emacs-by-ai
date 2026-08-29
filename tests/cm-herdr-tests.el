@@ -62,7 +62,7 @@
 
 (ert-deftest cm/herdr-bind-agent-pushes-handshake ()
   ;; Stub the shell + UI: agent list from fixture, pick the working one, capture the push.
-  (let (captured)
+  (let (captured (cm/ai-bound-agent nil))
     (cl-letf (((symbol-function 'cm/ai-herdr--available-p) (lambda () t))
               ((symbol-function 'cm/ai-herdr--agent-list)
                (lambda () (cm/ai-herdr--parse-agent-list cm/herdr-test--fixture)))
@@ -78,7 +78,10 @@
       (cm/ai-bind-agent)
       (should (equal (car captured) "wH:p1"))
       (should (string-prefix-p "[emacs-bridge] connect " (cadr captured)))
-      (should (string-match-p "emacs-4242" (cadr captured))))))
+      (should (string-match-p "emacs-4242" (cadr captured)))
+      ;; bind now also records the agent locally
+      (should cm/ai-bound-agent)
+      (should (equal (plist-get cm/ai-bound-agent :pane_id) "wH:p1")))))
 
 (ert-deftest cm/herdr-bind-agent-blocked-confirm-declined ()
   ;; A blocked target with the user declining the y-or-n-p must NOT push.
@@ -96,6 +99,51 @@
               ((symbol-function 'cm/ai-herdr--push) (lambda (&rest _) (setq pushed t) '(:exit 0 :output ""))))
       (should-error (cm/ai-bind-agent) :type 'user-error)
       (should-not pushed))))
+
+(defconst cm/herdr-test--bound-agent
+  '(:agent "claude" :agent_status "working"
+    :cwd "/home/jim/projects/emacs-again" :pane_id "wH:p1")
+  "Fixture agent plist for bound-agent tests.")
+
+(ert-deftest cm/herdr-agent-mode-line-unbound ()
+  (let ((cm/ai-bound-agent nil))
+    (should-not (cm/ai-agent--mode-line))))
+
+(ert-deftest cm/herdr-agent-mode-line-bound ()
+  (let ((cm/ai-bound-agent cm/herdr-test--bound-agent))
+    (let ((s (cm/ai-agent--mode-line)))
+      (should (stringp s))
+      (should (string-match-p "wH:p1" s))
+      (should (eq (get-text-property 0 'face s) 'cm/ai-agent-mode-line)))))
+
+(ert-deftest cm/herdr-agent-require-bound-returns-agent ()
+  (let ((cm/ai-bound-agent cm/herdr-test--bound-agent))
+    (should (equal (cm/ai-agent--require-bound) cm/herdr-test--bound-agent))))
+
+(ert-deftest cm/herdr-agent-require-bound-errors-when-nil ()
+  (let ((cm/ai-bound-agent nil))
+    (should-error (cm/ai-agent--require-bound) :type 'user-error)))
+
+(ert-deftest cm/herdr-agent-push-sends-to-bound-pane ()
+  (let ((cm/ai-bound-agent cm/herdr-test--bound-agent)
+        captured)
+    (cl-letf (((symbol-function 'cm/ai-herdr--push)
+               (lambda (pane text) (setq captured (list pane text))
+                 '(:exit 0 :output "{\"type\":\"agent_prompted\"}"))))
+      (cm/ai-agent-push "hello")
+      (should (equal captured '("wH:p1" "hello"))))))
+
+(ert-deftest cm/herdr-agent-push-errors-when-unbound ()
+  (let ((cm/ai-bound-agent nil))
+    (should-error (cm/ai-agent-push "hello") :type 'user-error)))
+
+(ert-deftest cm/herdr-unbind-agent-clears-state ()
+  (let ((cm/ai-bound-agent cm/herdr-test--bound-agent))
+    (cm/ai-unbind-agent)
+    (should-not cm/ai-bound-agent)))
+
+(ert-deftest cm/herdr-global-mode-string-has-agent-eval ()
+  (should (member '(:eval (cm/ai-agent--mode-line)) global-mode-string)))
 
 (provide 'cm-herdr-tests)
 ;;; cm-herdr-tests.el ends here

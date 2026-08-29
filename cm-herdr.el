@@ -92,6 +92,11 @@ Return (:exit :output)."
   (and (= 0 (plist-get result :exit))
        (string-match-p "agent_prompted" (or (plist-get result :output) ""))))
 
+(defvar cm/ai-bound-agent nil
+  "The herdr agent (plist) this Emacs is bound to, or nil.
+Instance-global; set by `cm/ai-bind-agent', cleared by
+`cm/ai-unbind-agent'.")
+
 ;;;###autoload
 (defun cm/ai-bind-agent ()
   "Pick a running herdr agent and push this Emacs's socket handshake to it."
@@ -111,11 +116,87 @@ Return (:exit :output)."
                        (format "Agent %s is blocked; `agent prompt' may be rejected. Push anyway? "
                                pane))))
         (user-error "Aborted"))
+      (setq cm/ai-bound-agent agent)
+      (force-mode-line-update t)
       (let* ((payload (cm/ai-herdr--handshake-payload (cm/ai-herdr--this-emacs-descriptor)))
              (result (cm/ai-herdr--push pane payload)))
         (if (cm/ai-herdr--push-ok-p result)
             (message "cm/ai-bind-agent: pushed emacs-bridge handshake to %s" pane)
           (message "cm/ai-bind-agent: push to %s failed (%S)" pane result))))))
+
+(defun cm/ai-agent--require-bound ()
+  "Return `cm/ai-bound-agent' or signal a `user-error' when unbound."
+  (or cm/ai-bound-agent
+      (user-error "No bound agent; run M-x cm/ai-bind-agent first")))
+
+;;;###autoload
+(defun cm/ai-agent-push (text)
+  "Push TEXT to the bound herdr agent.
+Interactively, TEXT is the active region or a prompt read via
+`read-string'."
+  (interactive
+   (list (if (use-region-p)
+             (buffer-substring-no-properties (region-beginning) (region-end))
+           (read-string "Push to bound agent: "))))
+  (let* ((agent (cm/ai-agent--require-bound))
+         (pane (plist-get agent :pane_id))
+         (result (cm/ai-herdr--push pane text)))
+    (if (cm/ai-herdr--push-ok-p result)
+        (message "cm/ai-agent-push: pushed to %s" pane)
+      (message "cm/ai-agent-push: push to %s failed (%S)" pane result))))
+
+;;;###autoload
+(defun cm/ai-agent-read ()
+  "Dump the bound herdr agent's pane output into a `view-mode' buffer."
+  (interactive)
+  (let* ((agent (cm/ai-agent--require-bound))
+         (pane (plist-get agent :pane_id))
+         (result (cm/ai-herdr--run "agent" "read" pane))
+         (buf (get-buffer-create (format "*ai-agent:%s*" pane))))
+    (with-current-buffer buf
+      (let ((inhibit-read-only t))
+        (erase-buffer)
+        (insert (or (plist-get result :output) "")))
+      (view-mode 1))
+    (display-buffer buf)))
+
+;;;###autoload
+(defun cm/ai-agent-status ()
+  "Message the bound herdr agent's live status."
+  (interactive)
+  (let* ((agent (cm/ai-agent--require-bound))
+         (pane (plist-get agent :pane_id))
+         (live (cl-find pane (cm/ai-herdr--agent-list)
+                         :key (lambda (a) (plist-get a :pane_id))
+                         :test #'equal)))
+    (if live
+        (message "%s · %s · %s"
+                 (plist-get live :agent) pane (plist-get live :agent_status))
+      (message "%s · %s · (gone?)" (plist-get agent :agent) pane))))
+
+;;;###autoload
+(defun cm/ai-unbind-agent ()
+  "Clear the bound herdr agent."
+  (interactive)
+  (setq cm/ai-bound-agent nil)
+  (force-mode-line-update t)
+  (message "Unbound"))
+
+(defface cm/ai-agent-mode-line '((t :inherit warning))
+  "Face for the bound-agent mode-line indicator."
+  :group 'tools)
+
+(defun cm/ai-agent--mode-line ()
+  "Mode-line string for the bound agent, or nil when unbound."
+  (when cm/ai-bound-agent
+    (propertize (format " ⇄%s" (plist-get cm/ai-bound-agent :pane_id))
+                'face 'cm/ai-agent-mode-line
+                'help-echo (format "Bound herdr agent: %s · %s · %s"
+                                    (plist-get cm/ai-bound-agent :agent)
+                                    (plist-get cm/ai-bound-agent :agent_status)
+                                    (plist-get cm/ai-bound-agent :cwd)))))
+
+(add-to-list 'global-mode-string '(:eval (cm/ai-agent--mode-line)) t)
 
 (provide 'cm-herdr)
 ;;; cm-herdr.el ends here

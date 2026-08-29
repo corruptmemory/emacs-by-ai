@@ -97,6 +97,15 @@ Return (:exit :output)."
 Instance-global; set by `cm/ai-bind-agent', cleared by
 `cm/ai-unbind-agent'.")
 
+(defun cm/ai-agent--session-name (agent)
+  "Human label for AGENT plist: <agent-kind>@<project-basename>."
+  (let ((kind (or (plist-get agent :agent) "?"))
+        (proj (let ((cwd (plist-get agent :cwd)))
+                (if (and (stringp cwd) (not (string-empty-p cwd)))
+                    (file-name-nondirectory (directory-file-name cwd))
+                  "?"))))
+    (format "%s@%s" kind proj)))
+
 ;;;###autoload
 (defun cm/ai-bind-agent ()
   "Pick a running herdr agent and push this Emacs's socket handshake to it."
@@ -121,8 +130,10 @@ Instance-global; set by `cm/ai-bind-agent', cleared by
       (let* ((payload (cm/ai-herdr--handshake-payload (cm/ai-herdr--this-emacs-descriptor)))
              (result (cm/ai-herdr--push pane payload)))
         (if (cm/ai-herdr--push-ok-p result)
-            (message "cm/ai-bind-agent: pushed emacs-bridge handshake to %s" pane)
-          (message "cm/ai-bind-agent: push to %s failed (%S)" pane result))))))
+            (message "cm/ai-bind-agent: bound to %s (handshake sent)"
+                     (cm/ai-agent--session-name agent))
+          (message "cm/ai-bind-agent: bound to %s but handshake push failed (%S)"
+                   (cm/ai-agent--session-name agent) result))))))
 
 (defun cm/ai-agent--require-bound ()
   "Return `cm/ai-bound-agent' or signal a `user-error' when unbound."
@@ -142,8 +153,9 @@ Interactively, TEXT is the active region or a prompt read via
          (pane (plist-get agent :pane_id))
          (result (cm/ai-herdr--push pane text)))
     (if (cm/ai-herdr--push-ok-p result)
-        (message "cm/ai-agent-push: pushed to %s" pane)
-      (message "cm/ai-agent-push: push to %s failed (%S)" pane result))))
+        (message "cm/ai-agent-push: pushed to %s" (cm/ai-agent--session-name agent))
+      (message "cm/ai-agent-push: push to %s failed (%S)"
+               (cm/ai-agent--session-name agent) result))))
 
 ;;;###autoload
 (defun cm/ai-agent-read ()
@@ -170,9 +182,9 @@ Interactively, TEXT is the active region or a prompt read via
                          :key (lambda (a) (plist-get a :pane_id))
                          :test #'equal)))
     (if live
-        (message "%s · %s · %s"
-                 (plist-get live :agent) pane (plist-get live :agent_status))
-      (message "%s · %s · (gone?)" (plist-get agent :agent) pane))))
+        (message "%s · %s"
+                 (cm/ai-agent--session-name live) (plist-get live :agent_status))
+      (message "%s · (gone?)" (cm/ai-agent--session-name agent)))))
 
 ;;;###autoload
 (defun cm/ai-unbind-agent ()
@@ -183,18 +195,28 @@ Interactively, TEXT is the active region or a prompt read via
   (message "Unbound"))
 
 (defface cm/ai-agent-mode-line '((t :inherit warning))
-  "Face for the bound-agent mode-line indicator."
+  "Mode-line face for the bound-agent indicator when an agent is bound."
+  :group 'tools)
+
+(defface cm/ai-agent-mode-line-unbound '((t :inherit shadow))
+  "Mode-line face for the bound-agent indicator when no agent is bound."
   :group 'tools)
 
 (defun cm/ai-agent--mode-line ()
-  "Mode-line string for the bound agent, or nil when unbound."
-  (when cm/ai-bound-agent
-    (propertize (format " ⇄%s" (plist-get cm/ai-bound-agent :pane_id))
-                'face 'cm/ai-agent-mode-line
-                'help-echo (format "Bound herdr agent: %s · %s · %s"
-                                    (plist-get cm/ai-bound-agent :agent)
-                                    (plist-get cm/ai-bound-agent :agent_status)
-                                    (plist-get cm/ai-bound-agent :cwd)))))
+  "Persistent mode-line string for the bound-agent state.
+Shows `agent:<kind>@<project>' when bound, `agent:—' when not; the exact
+herdr pane id stays in the hover tooltip."
+  (if cm/ai-bound-agent
+      (propertize (format " agent:%s" (cm/ai-agent--session-name cm/ai-bound-agent))
+                  'face 'cm/ai-agent-mode-line
+                  'help-echo (format "Bound herdr agent: %s · %s · %s · %s"
+                                     (plist-get cm/ai-bound-agent :agent)
+                                     (plist-get cm/ai-bound-agent :agent_status)
+                                     (plist-get cm/ai-bound-agent :cwd)
+                                     (plist-get cm/ai-bound-agent :pane_id)))
+    (propertize " agent:—"
+                'face 'cm/ai-agent-mode-line-unbound
+                'help-echo "No herdr agent bound (M-x cm/ai-bind-agent)")))
 
 (add-to-list 'global-mode-string '(:eval (cm/ai-agent--mode-line)) t)
 

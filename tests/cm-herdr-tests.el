@@ -105,15 +105,28 @@
     :cwd "/home/jim/projects/emacs-again" :pane_id "wH:p1")
   "Fixture agent plist for bound-agent tests.")
 
+(ert-deftest cm/herdr-agent-session-name ()
+  (should (equal (cm/ai-agent--session-name cm/herdr-test--bound-agent)
+                 "claude@emacs-again"))
+  ;; missing/empty cwd falls back to "?"
+  (should (equal (cm/ai-agent--session-name '(:agent "claude" :cwd "")) "claude@?")))
+
 (ert-deftest cm/herdr-agent-mode-line-unbound ()
+  ;; persistent: shows "agent:—" (not nil) with the unbound face
   (let ((cm/ai-bound-agent nil))
-    (should-not (cm/ai-agent--mode-line))))
+    (let ((s (cm/ai-agent--mode-line)))
+      (should (stringp s))
+      (should (string-match-p "agent:—" s))
+      (should (eq (get-text-property 0 'face s) 'cm/ai-agent-mode-line-unbound)))))
 
 (ert-deftest cm/herdr-agent-mode-line-bound ()
   (let ((cm/ai-bound-agent cm/herdr-test--bound-agent))
     (let ((s (cm/ai-agent--mode-line)))
       (should (stringp s))
-      (should (string-match-p "wH:p1" s))
+      (should (string-match-p "agent:claude@emacs-again" s))
+      ;; the cryptic pane id is NOT in the bar, but IS in the tooltip
+      (should-not (string-match-p "wH:p1" s))
+      (should (string-match-p "wH:p1" (get-text-property 0 'help-echo s)))
       (should (eq (get-text-property 0 'face s) 'cm/ai-agent-mode-line)))))
 
 (ert-deftest cm/herdr-agent-require-bound-returns-agent ()

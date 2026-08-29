@@ -145,5 +145,52 @@
 (ert-deftest cm/herdr-global-mode-string-has-agent-eval ()
   (should (member '(:eval (cm/ai-agent--mode-line)) global-mode-string)))
 
+(ert-deftest cm/herdr-agent-read-dumps-output-to-buffer ()
+  (let ((cm/ai-bound-agent cm/herdr-test--bound-agent))
+    (unwind-protect
+        (progn
+          (cl-letf (((symbol-function 'cm/ai-herdr--run)
+                     (lambda (&rest _) '(:exit 0 :output "PANE OUTPUT XYZ"))))
+            (cm/ai-agent-read))
+          (should (get-buffer "*ai-agent:wH:p1*"))
+          (with-current-buffer "*ai-agent:wH:p1*"
+            (should (string-match-p "PANE OUTPUT XYZ" (buffer-string)))))
+      (when (get-buffer "*ai-agent:wH:p1*")
+        (kill-buffer "*ai-agent:wH:p1*")))))
+
+(ert-deftest cm/herdr-agent-read-errors-when-unbound ()
+  (let ((cm/ai-bound-agent nil))
+    (should-error (cm/ai-agent-read) :type 'user-error)))
+
+(ert-deftest cm/herdr-agent-status-messages-live-status ()
+  ;; Proves the command re-queries herdr rather than echoing the stale
+  ;; bound-plist snapshot ("working").
+  (let (msg)
+    (cl-letf (((symbol-function 'message)
+               (lambda (fmt &rest args) (setq msg (apply #'format fmt args))))
+              ((symbol-function 'cm/ai-herdr--agent-list)
+               (lambda () (list '(:agent "claude" :agent_status "idle"
+                                   :cwd "/x" :pane_id "wH:p1"))))
+              (cm/ai-bound-agent '(:agent "claude" :agent_status "working"
+                                    :cwd "/x" :pane_id "wH:p1")))
+      (cm/ai-agent-status)
+      (should (string-match-p "idle" msg)))))
+
+(ert-deftest cm/herdr-agent-status-messages-gone-when-not-found ()
+  (let (msg)
+    (cl-letf (((symbol-function 'message)
+               (lambda (fmt &rest args) (setq msg (apply #'format fmt args))))
+              ((symbol-function 'cm/ai-herdr--agent-list)
+               (lambda () (list '(:agent "claude" :agent_status "idle"
+                                   :cwd "/y" :pane_id "wOther:p1"))))
+              (cm/ai-bound-agent '(:agent "claude" :agent_status "working"
+                                    :cwd "/x" :pane_id "wH:p1")))
+      (cm/ai-agent-status)
+      (should (string-match-p "gone" msg)))))
+
+(ert-deftest cm/herdr-agent-status-errors-when-unbound ()
+  (let ((cm/ai-bound-agent nil))
+    (should-error (cm/ai-agent-status) :type 'user-error)))
+
 (provide 'cm-herdr-tests)
 ;;; cm-herdr-tests.el ends here

@@ -754,30 +754,80 @@ Seeding is skipped for multi-line or very large regions."
   ([remap other-window] . ace-window)
   ("M-o" . ace-window))
 
-;;;; Corfu — in-buffer completion popup.
-(use-package corfu
-  :custom
-  (corfu-auto nil)
-  (corfu-cycle t)
-  (corfu-preselect 'prompt)
-  :init
-  (global-corfu-mode))
+;;;; In-buffer completion — Emacs 31 built-ins, on trial since 2026-09-10.
+;;;; Corfu's child-frame popup covered the code around point.  The built-in
+;;;; pair below keeps the buffer clear, with one rule: ghost text after point
+;;;; appears ONLY when exactly one candidate matches (TAB accepts it);
+;;;; otherwise there is no ghost and TAB opens the *Completions* buffer BELOW
+;;;; the window (never over it) via `tab-always-indent' = complete.
+;;;; Started from Protesilaos' setup, then tightened to that rule:
+;;;; https://protesilaos.com/codelog/2026-08-29-emacs-completion-preview-mode/
+;;;; The Corfu blocks stay commented out right after, for a one-step revert.
 
-;;;; corfu-history — rank candidates by prior selections.
-(use-package corfu-history
+;;;; completion-preview — ghost text for the symbol at point, unique match only.
+(use-package completion-preview
   :straight nil
-  :after corfu
-  :init
-  (corfu-history-mode 1))
-
-;;;; corfu-popupinfo — inline documentation popup for Corfu candidates.
-(use-package corfu-popupinfo
-  :straight nil
-  :after corfu
+  :demand t
+  :bind
+  (:map completion-preview-active-mode-map
+        ("<tab>" . completion-preview-insert)        ; accept the (unique) candidate
+        ("M-i"   . completion-preview-insert-word))  ; or just its next word
   :custom
-  (corfu-popupinfo-delay '(0.7 . 0.3))
-  :init
-  (corfu-popupinfo-mode 1))
+  (completion-preview-exact-match-only t)   ; several candidates -> no ghost
+  (completion-preview-minimum-symbol-length 2)
+  :config
+  (with-eval-after-load 'org
+    (add-to-list 'completion-preview-commands #'org-self-insert-command))
+  (global-completion-preview-mode 1))
+
+;;;; minibuffer — the *Completions* buffer as the in-buffer list.  Emacs 31:
+;;;; it updates as you type, the selection survives updates, RET picks it.
+(use-package minibuffer
+  :straight nil
+  :demand t
+  :bind
+  (:map completion-in-region-mode-map
+        ("M-i" . minibuffer-choose-completion)
+        ("M-n" . minibuffer-next-completion)
+        ("M-p" . minibuffer-previous-completion))
+  :custom
+  (completions-format 'one-column)
+  (completions-max-height 12)
+  (completion-auto-help t)
+  (completion-auto-select nil)
+  ;; Arrow keys, RET and C-g act on the visible list from the code buffer.
+  (minibuffer-visible-completions t)
+  (completion-eager-update t)
+  ;; No "Click or type M-i ..." lines and no "N possible completions:" header.
+  (completion-show-help nil)
+  (completions-header-format nil))
+
+;;;; Corfu (+ history, popupinfo) — DISABLED for the built-in trial above.
+;;;; Uncomment these three blocks (and kind-icon below) to revert.
+;; ;;;; Corfu — in-buffer completion popup.
+;; (use-package corfu
+;;   :custom
+;;   (corfu-auto nil)
+;;   (corfu-cycle t)
+;;   (corfu-preselect 'prompt)
+;;   :init
+;;   (global-corfu-mode))
+;;
+;; ;;;; corfu-history — rank candidates by prior selections.
+;; (use-package corfu-history
+;;   :straight nil
+;;   :after corfu
+;;   :init
+;;   (corfu-history-mode 1))
+;;
+;; ;;;; corfu-popupinfo — inline documentation popup for Corfu candidates.
+;; (use-package corfu-popupinfo
+;;   :straight nil
+;;   :after corfu
+;;   :custom
+;;   (corfu-popupinfo-delay '(0.7 . 0.3))
+;;   :init
+;;   (corfu-popupinfo-mode 1))
 
 ;;;; tempel — lightweight templates integrated with completion.
 (use-package tempel
@@ -796,13 +846,14 @@ Seeding is skipped for multi-line or very large regions."
 (use-package tempel-collection
   :after tempel)
 
-;;;; kind-icon — icons for completion candidates.
-(use-package kind-icon
-  :after corfu
-  :custom
-  (kind-icon-default-face 'corfu-default)
-  :config
-  (add-to-list 'corfu-margin-formatters #'kind-icon-margin-formatter))
+;;;; kind-icon — DISABLED with Corfu (it is a Corfu margin formatter).
+;; ;;;; kind-icon — icons for completion candidates.
+;; (use-package kind-icon
+;;   :after corfu
+;;   :custom
+;;   (kind-icon-default-face 'corfu-default)
+;;   :config
+;;   (add-to-list 'corfu-margin-formatters #'kind-icon-margin-formatter))
 
 ;;;; Multiple-cursors.
 ;; Fake cursors have two problems by default; both are fixed below without
@@ -1091,6 +1142,9 @@ non-bar (block / end-of-line) style untouched."
   :after yasnippet)
 
 ;;;; Cape — additional completion-at-point sources.
+;;;; Future fold (once the built-in completion trial sticks): `dabbrev-capf'
+;;;; is built in since Emacs 29 and can replace `cape-dabbrev'; `cape-file'
+;;;; has no built-in equivalent yet, so cape stays for now.
 (use-package cape
   :init
   (add-to-list 'completion-at-point-functions #'cape-file)

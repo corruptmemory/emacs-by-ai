@@ -33,7 +33,7 @@ The file is organized in this order:
 6. **Keybindings and editing** — winner-mode (layout undo/redo, reversible `C-x 1`), proportional window resizing, windmove, quick toggles (`C-c T` prefix), chunk word motion (`cm/` prefix), line movement, sexp navigation
 7. **Minibuffer completion** — Vertico (+ directory, repeat, multiform extensions), Orderless, Marginalia, savehist, prescient
 8. **Consult** — region-seeded and thing-at-point search wrappers (`cm/` prefix), embark integration
-9. **In-buffer completion** — Corfu (+ history, popupinfo), tempel, cape, kind-icon
+9. **In-buffer completion** — built-in `completion-preview-mode` (ghost text only on a unique match; TAB accepts it, M-i takes a word) + the Emacs 31 `*Completions*` buffer (TAB opens it when several candidates match; M-i/M-n/M-p inside; help header hidden), on trial since 2026-09-10; tempel, cape. Corfu (+ history, popupinfo) and kind-icon are commented out in place for a one-step revert
 10. **Editing packages** — multiple-cursors (with symbol-aware mark/skip bindings), expand-region, string-inflection, smartparens, flyspell (text-like modes only: text, org, markdown)
 11. **Git** — Magit, diff-hl (with flydiff for unsaved-change indicators)
 12. **Popup/buffer management** — Popper with project-based grouping, helpful; `ghostel` (libghostty-vt-backed terminal, replaces vterm) declared separately

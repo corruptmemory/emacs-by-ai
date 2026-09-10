@@ -73,8 +73,8 @@ The headline themes of 31 vs the current stable (30.x):
   `split-frame`/`merge-frames`, `split-tab`/`merge-tabs`,
   `other-window-backward` (`C-x O`), `mode-line-collapse-minor-modes`.
 - **Minibuffer/completion** — `*Completions*` shows immediately + updates as you
-  type, category inheritance, rewritten faster `flex` style. (Vanilla catching
-  up to Vertico/Corfu; does **not** replace them.)
+  type, category inheritance, rewritten faster `flex` style. (Vertico stays;
+  in-buffer, the vanilla pair now replaces Corfu on trial — see §2.2.)
 - **project.el** — many new commands (`project-root-find-file`,
   `project-save-some-buffers` on `C-x p C-x s`, `project-customize-dirlocals`,
   `project-prune-zombie-projects`, …).
@@ -151,12 +151,35 @@ replacement.
   3. The `CMakeLists.txt` basename mapping (`init.el:1588–1590`) is **not**
      part of treesit-auto and must be **kept** regardless.
 
-### 2.2 Built-in completion improvements — **NOT a drop** `[-] decided-against`
+### 2.2 Built-in completion improvements — **in-buffer trial** `[ ] open`
 
-We run Vertico + Corfu + Orderless + Marginalia + Consult + Embark + prescient
-(`init.el:547–785`). Emacs 31's `*Completions*` and `flex` improvements are the
-*vanilla* stack maturing; they do **not** match our framework. No change — noted
-so it isn't revisited.
+Revisited 2026-09-10. Minibuffer side unchanged: Vertico + Orderless +
+Marginalia + Consult + Embark + prescient stay (Vertico 2.14 already guards
+against 31's eager `*Completions*` display). In-buffer, Corfu's child-frame
+popup covered the code around point, so the Corfu blocks (+ history,
+popupinfo, kind-icon) are **commented out in place** and replaced by the
+built-in pair from Protesilaos' 2026-08-29 post: `completion-preview-mode`
+(ghost text only on a unique match via `completion-preview-exact-match-only`,
+min symbol length 2; TAB accepts it, M-i takes a word; with several candidates
+there is no ghost and TAB falls through to `completion-at-point`, i.e. the list) and the `*Completions*`
+buffer (one-column, max height 12, `minibuffer-visible-completions`,
+`completion-eager-update`, M-i/M-n/M-p in `completion-in-region-mode-map`,
+help header hidden via `completion-show-help` and `completions-header-format`).
+Verified by batch load: `completion-in-region-function` is back to
+`completion--in-region`, `corfu` never loads. Known losses: popupinfo's doc
+popup and corfu-history ranking. Committed 2026-09-10 after a first test drive;
+the Corfu blocks stay commented out in `init.el` until this is declared
+settled, then get deleted. Cape stays (future fold: `dabbrev-capf`).
+
+**Reverse recipe** (either path, then restart Emacs):
+
+1. Git, one commit, restores `init.el` and these docs together:
+   `git -C ~/.config/emacs revert $(git -C ~/.config/emacs log -1 --format=%h --grep='built-in completion-preview')`
+2. By hand: in `init.el`, uncomment the `corfu`, `corfu-history`,
+   `corfu-popupinfo` and `kind-icon` blocks and delete the `completion-preview`
+   and `minibuffer` blocks above them. `global-corfu-mode` re-takes
+   `completion-in-region-function`; nothing else references the built-in pair.
+   Straight still holds the corfu and kind-icon clones, so this works offline.
 
 ### 2.3 `mode-line-collapse-minor-modes` — **N/A** `[-] decided-against`
 

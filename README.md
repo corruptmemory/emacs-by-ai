@@ -39,7 +39,7 @@ On first launch, `straight.el` bootstraps itself and installs all packages. Tree
 
 ## Completion stack
 
-Vertico + Orderless + Consult + Marginalia + Embark in the minibuffer; Corfu + Cape + kind-icon in-buffer. Prescient provides frequency/recency sorting for Vertico. Smartparens handles auto-pairing and structured delimiter editing.
+Vertico + Orderless + Consult + Marginalia + Embark in the minibuffer. In-buffer, the built-in `completion-preview-mode` (ghost text after point, only when exactly one candidate matches; TAB accepts it) plus the Emacs 31 `*Completions*` buffer (TAB opens it below the window when several match; updates as you type), adapted from [Protesilaos' setup](https://protesilaos.com/codelog/2026-08-29-emacs-completion-preview-mode/); on trial since 2026-09-10, with Corfu and kind-icon commented out in `init.el` for a one-step revert. Cape adds file and dabbrev capfs. Prescient provides frequency/recency sorting for Vertico. Smartparens handles auto-pairing and structured delimiter editing.
 
 ## LSP
 

@@ -173,6 +173,53 @@ Jai (`jails`) is **intentionally left unwired**, even though the `jails` binary 
 
 Slang (`slangd`, shader-slang.org) uses [`K1ngst0m/slang-mode`](https://github.com/K1ngst0m/slang-mode) — a purpose-built major mode (regex font-lock + indent + imenu) plus its `slang-lsp.el`, which auto-registers `slangd` with eglot **only when it is found on `PATH`** (install via AUR `shader-slang-bin`, symlinked into `~/.local/bin`). Two gotchas are baked into the `init.el` block: (1) `slang-lsp-initialize` mutates eglot *globally* — it adds `flymake` to `eglot-stay-out-of` (which would suppress eglot's flymake diagnostics in **every** language), so the config `delq`s it back out; (2) hover needs a recent eglot — `emacs-straight/eglot` 1.23 at commit `3371f2b` shipped a `gfm-extract` markup-render bug (`invalid-function #'gfm-extract`), fixed by `straight-pull-package eglot` (≥ `3c64b09`). The mode's floor works with no LSP; `C-c w r` multi-root grep covers references (which `slangd` can't do yet).
 
+## LSP completion, snippets, and yasnippet
+
+Three coupled settings (2026-09-12) fix a long-standing friction where an active
+template — from an LSP completion *or* one of your own snippets — captured TAB
+and blocked in-buffer completion (and suppressed signature-help). It predates
+and is independent of the Corfu→built-in completion switch; both sat downstream
+of the same template layer.
+
+- **eglot no longer expands LSP completions as yasnippet snippets** (in the
+  eglot `:config`). eglot advertises `snippetSupport` to a server **whenever
+  yasnippet is merely installed** — `eglot--snippet-expansion-fn` only checks
+  `(fboundp 'yas-minor-mode)` (eglot.el ~2249), and the capability is gated on
+  that (eglot.el ~1112). So gopls returned function completions as *snippets*
+  (`Printf(…)` with tabstops), eglot expanded them via yasnippet, and the live
+  snippet's overlay keymap owned TAB. `(advice-add 'eglot--snippet-expansion-fn
+  :override #'ignore)` drops the capability (servers return **plain-text**
+  completions) and disables the expansion. This hook is used **only** by eglot;
+  ordinary yasnippet expansion of your own snippets is untouched.
+  - **Auto-parens are NOT lost.** `snippetSupport: false` only stops the
+    *tabstop template*; gopls still adds the call `()` via its own
+    `completeFunctionCalls` (default on), now as **plain text** — so `Printf`
+    still completes to `Printf()` with point inside, but with no field to trap
+    TAB. Keeping the parens while killing the template is the sweet spot.
+- **eldoc composes hover + signature** — `(setq eldoc-documentation-strategy
+  #'eldoc-documentation-compose)`. The default strategy surfaces only the first
+  eldoc source, so a call's signature was lost to hover; composing shows both
+  (and eldoc-box renders both). This is what puts the live `Printf(format
+  string, a ...any)` signature in the echo area as you fill the call.
+- **TAB is freed inside a live yasnippet field** (yasnippet `:config`).
+  yasnippet installs `yas-keymap` as the field's **overlay keymap** — the top of
+  the precedence stack, above the completion-preview map and `tab-always-indent`
+  — binding TAB to next-field (yasnippet.el ~3694 / ~430). So inside *any* live
+  snippet (e.g. your own `iferr`) TAB could never reach completion. The block
+  unbinds TAB/`[tab]` in `yas-keymap` and moves field navigation to
+  `C-<tab>` / `C-S-<tab>`; now TAB inside a field behaves exactly as outside
+  (accept the completion-preview ghost, else `completion-at-point`/indent).
+  Switching template engines would not help — `tempel` binds TAB in its own
+  active-template map the same way; the fix is the keymap, not the engine.
+
+**The transient yellow highlight around a just-completed `()` is smartparens,
+not a template** — `sp-pair-overlay-face`, its "you're inside a freshly
+auto-paired region" indicator, which clears as you type past the pair. Cosmetic;
+it does not gate completion. (Confirmed: at rest, `(yas-active-snippets)` is
+empty and point is in no field, yet the parens are present — they are gopls's
+plain-text `completeFunctionCalls`, and the highlight is the smartparens
+overlay.)
+
 ## Odin editing (`odin-mode`)
 
 Odin uses [`mattt-b/odin-mode`](https://github.com/mattt-b/odin-mode) (the

@@ -1175,9 +1175,25 @@ non-bar (block / end-of-line) style untouched."
                (templ "https://github.com/vrischmann/tree-sitter-templ")))
   (add-to-list 'treesit-language-source-alist src))
 
-;;;; yasnippet — snippet expansion (used by eglot for LSP snippets).
+;;;; yasnippet — snippet expansion for your own snippets (yasnippet-snippets).
+;;;; (eglot no longer routes LSP completions through it -- see the eglot block's
+;;;; `eglot--snippet-expansion-fn' override.)
+;;;;
+;;;; Free TAB inside a live snippet field.  yasnippet installs `yas-keymap' as
+;;;; the field's OVERLAY keymap (top of the precedence stack, above the
+;;;; completion-preview map and `tab-always-indent'), binding TAB to
+;;;; next-field -- so while any field is active TAB can never reach completion.
+;;;; Unbind TAB there and move field navigation to C-<tab>/C-S-<tab>: now TAB
+;;;; behaves inside a field exactly as outside (accept the preview ghost, else
+;;;; `completion-at-point'/indent), so you can complete while filling a snippet.
 (use-package yasnippet
-  :hook (prog-mode . yas-minor-mode))
+  :hook (prog-mode . yas-minor-mode)
+  :config
+  (define-key yas-keymap (kbd "TAB")       nil)
+  (define-key yas-keymap [tab]             nil)
+  (define-key yas-keymap (kbd "C-<tab>")   #'yas-next-field-or-maybe-expand)
+  (define-key yas-keymap (kbd "C-S-<tab>") #'yas-prev-field)
+  (define-key yas-keymap [C-iso-lefttab]   #'yas-prev-field))
 
 (use-package yasnippet-snippets
   :after yasnippet)
@@ -1249,6 +1265,22 @@ non-bar (block / end-of-line) style untouched."
   :config
   (add-hook 'eglot-managed-mode-hook
             #'cm/xref-union-disable-in-eglot-managed-buffer)
+  ;; Do NOT expand LSP completions as yasnippet snippets.  eglot advertises
+  ;; `snippetSupport' to servers whenever yasnippet is merely installed
+  ;; (`eglot--snippet-expansion-fn' only checks `(fboundp 'yas-minor-mode)'),
+  ;; so a function completion like `Printf' arrives as a snippet -- `Printf(…)'
+  ;; with tabstops -- expanded via yasnippet.  The live snippet's overlay
+  ;; keymap then owns TAB (field navigation), which blocks `completion-at-point'
+  ;; inside the call and suppresses signature-help.  Overriding the indicator to
+  ;; `ignore' drops the `snippetSupport' capability (servers return PLAIN
+  ;; completions -- `Printf' inserts `Printf', you type `(' yourself and get
+  ;; live signature-help) AND disables the expansion.  This hook is used ONLY by
+  ;; eglot; ordinary yasnippet expansion (your own snippets) is untouched.
+  (advice-add 'eglot--snippet-expansion-fn :override #'ignore)
+  ;; Compose eldoc sources so eglot's hover AND signature-help both surface
+  ;; (the default strategy shows only the first, so the call signature was lost
+  ;; to hover).  eldoc-box then renders both.
+  (setq eldoc-documentation-strategy #'eldoc-documentation-compose)
   (add-to-list 'eglot-server-programs '(odin-mode . ("ols")))
   (add-to-list 'eglot-server-programs '(zig-mode . ("zls")))
   (add-to-list 'eglot-server-programs '(templ-ts-mode . ("templ" "lsp")))

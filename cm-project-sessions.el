@@ -24,6 +24,10 @@
 (defvar easysession-directory nil)
 (defvar easysession-switch-to-save-session nil)
 
+;; olivetti is an independent package (not required here); the restore-repair
+;; below only touches its mode when a window already wears its footprint.
+(declare-function olivetti-mode "olivetti" (&optional arg))
+
 (defcustom cm/scratch-default-mode 'text-mode
   "Major mode applied to newly created scratch and stash buffers."
   :type 'function)
@@ -221,6 +225,49 @@ pure serialization function."
                 (cons 'value data)
                 (cons 'remaining-buffers remaining)))))))
 
+;; --- olivetti footprint repair (session-restore desync) --------------------
+;;
+;; `olivetti-mode' produces its effect entirely as WINDOW state — window
+;; margins and the fringe layout (see the "Olivetti" section in CLAUDE.md).
+;; easysession persists the workspace via `frameset-save' -> `window-state-get',
+;; which faithfully captures those margins/fringes; but `olivetti-mode' is a
+;; buffer-local minor mode that nothing re-enables on restore (it is
+;; deliberately hooked into no major mode, and easysession restores buffers by
+;; re-visiting files, re-running only the major mode + its hooks).  So a
+;; restored buffer wears olivetti's costume — centered column, no bands — while
+;; the mode is OFF: `C-c T o' then turns it *on*, and worse, with no olivetti
+;; hook on `window-size-change-functions' the column no longer tracks resizes.
+;;
+;; The repair re-runs the mode rather than re-applying its geometry: turning
+;; `olivetti-mode' on recomputes margins/fringes for the CURRENT frame size and
+;; reinstalls the resize hooks — it fixes the cause (mode off), not the symptom
+;; (stale margins).  Detection is by footprint: in this config only olivetti
+;; sets window margins (diff-hl uses fringes; the table/code narrowers use
+;; `narrow-to-region'), so a positive left margin with the mode off is
+;; unambiguously a restored olivetti window.  If some future package also sets
+;; window margins, tighten `cm/session--olivetti-footprint-p'.
+
+(defun cm/session--olivetti-footprint-p (mode-on left-margin-cols)
+  "Non-nil when a window wears olivetti's footprint but its buffer's mode is off.
+MODE-ON is the buffer's `olivetti-mode' value; LEFT-MARGIN-COLS is the car of
+`window-margins' (nil when unset).  See the commentary above for why a positive
+left margin with the mode off means a restored-but-not-re-enabled olivetti."
+  (and (not mode-on) (integerp left-margin-cols) (> left-margin-cols 0)))
+
+(defun cm/session--reenable-olivetti ()
+  "Re-enable `olivetti-mode' in windows left wearing its restored footprint.
+Run from `easysession-after-load-hook' to repair the frameset's persist-the-
+effect-not-the-cause desync described in the commentary above."
+  (when (featurep 'olivetti)
+    (walk-windows
+     (lambda (w)
+       (when (cm/session--olivetti-footprint-p
+              (buffer-local-value 'olivetti-mode (window-buffer w))
+              (car (window-margins w)))
+         (with-selected-window w
+           (olivetti-mode 1))))
+     nil t)))
+
 ;; --- C-x p p advice, startup restore, setup --------------------------------
 
 (defun cm/session--project-switch-advice (_orig &optional dir &rest _)
@@ -263,7 +310,9 @@ leaves Emacs blank (a fresh project is created on the first `C-x p p')."
   (add-hook 'kill-emacs-hook #'cm/stash-save)
   ;; Ride easysession's save cadence (periodic + flip + exit) so the stash has
   ;; the same ~cm/session-save-interval crash bound as the session blob.
-  (add-hook 'easysession-before-save-hook #'cm/stash-save))
+  (add-hook 'easysession-before-save-hook #'cm/stash-save)
+  ;; Repair the olivetti footprint/mode desync on every restore (see above).
+  (add-hook 'easysession-after-load-hook #'cm/session--reenable-olivetti))
 
 (provide 'cm-project-sessions)
 ;;; cm-project-sessions.el ends here

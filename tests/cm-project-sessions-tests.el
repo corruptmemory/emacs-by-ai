@@ -212,5 +212,18 @@
       (when (file-exists-p cm/stash-file) (delete-file cm/stash-file))
       (when (file-exists-p bak) (delete-file bak)))))
 
+;; --- olivetti footprint detection (session-restore desync) -----------------
+
+(ert-deftest cm/session--olivetti-footprint-p--detects-costume ()
+  "A restored olivetti footprint (mode off, positive left margin) is detected."
+  ;; The fake state: frameset replayed the margins, mode was never re-enabled.
+  (should (cm/session--olivetti-footprint-p nil 38))
+  ;; Mode genuinely on -> not a costume, leave it alone.
+  (should-not (cm/session--olivetti-footprint-p t 38))
+  ;; No margin -> an ordinary window, nothing to promote.
+  (should-not (cm/session--olivetti-footprint-p nil 0))
+  ;; `window-margins' returns nil (not 0) when unset — must be handled.
+  (should-not (cm/session--olivetti-footprint-p nil nil)))
+
 (provide 'cm-project-sessions-tests)
 ;;; cm-project-sessions-tests.el ends here

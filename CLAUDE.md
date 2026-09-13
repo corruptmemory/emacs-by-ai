@@ -28,7 +28,7 @@ The file is organized in this order:
 1. **Startup/bootstrap** — timing display, straight.el bootstrap, use-package integration
 2. **Core settings** — custom file, local overrides, backups, auto-revert, delete-selection, electric-indent, electric-pair (auto-close + brace expansion on RET), tabs, performance (bidi off, skip fontification on input, 4MB process buffer), kill ring (clipboard preservation, dedup), editing niceties (auto-chmod scripts, no ffap pings, string re-builder syntax, auto-select help windows, repeat mark popping), recentf, saveplace (with recenter after restore), per-instance server (PID-named, stale socket cleanup)
 3. **PATH** — adds ~/.cargo/bin, ~/.local/bin, ~/go/bin, ~/projects/Odin, ~/projects/ols to exec-path; then the `mise` package (`global-mise-mode`) layers per-directory, buffer-local tool environments on top (Ruby/etc. via mise — see "Ruby / Rails")
-4. **Theme and fonts** — loads dracula-pro-blade with fringe-contrast advice; `fontaine` presets (TX-02 mono + Inter variable + JoyPixels emoji); `mixed-pitch-mode` auto-enabled in prose modes with `C-c T p` toggle; shared heading-scale machinery for org + markdown
+4. **Theme and fonts** — loads modus-vivendi-tinted with fringe-contrast advice; `fontaine` presets (TX-02 mono + Inter variable + JoyPixels emoji); `mixed-pitch-mode` auto-enabled in prose modes with `C-c T p` toggle; shared heading-scale machinery for org + markdown; olivetti centered-prose column (`C-c T o`, per-buffer only — see "Olivetti" below)
 5. **Scrolling** — pixel-scroll-precision-mode with wheel/trackpad profiles driven by `cm/mouse-profile`; trackpad flips horizontal scroll and disables interpolated page scroll for instant PgUp/PgDn
 6. **Keybindings and editing** — winner-mode (layout undo/redo, reversible `C-x 1`), proportional window resizing, windmove, quick toggles (`C-c T` prefix), chunk word motion (`cm/` prefix), line movement, sexp navigation
 7. **Minibuffer completion** — Vertico (+ directory, repeat, multiform extensions), Orderless, Marginalia, savehist, prescient
@@ -74,6 +74,55 @@ Confirm with `M-: (memq 'markdown-table-face mixed-pitch-fixed-pitch-faces)`. If
 **Heading scale.** `cm/heading-scale-factor` (default 1.2) multiplies the *theme-baseline* heights of `org-level-*` and `markdown-header-face-*`. Baselines are captured once per group on first apply and re-captured after any `load-theme` (`:after` advice on `load-theme`), so repeated calls never compound (1.2 × 1.2 = 1.44 trap). The captured-baseline alist is `cm/heading-base-heights`, keyed by group symbol (`org`, `markdown`) — adding a new scaled mode means: define the face list, write a `cm/X-apply-heading-scale` wrapper calling `cm/apply-heading-scale 'X faces`, hook it into the mode, and add it to `cm/refresh-heading-scale`.
 
 **Startup font-lock race (`cm/refontify-user-buffers`).** `fontaine-set-preset` in fontaine's `:config` calls `set-face-attribute` on `default`, which cascades face-spec recomputation across every face inheriting from default — i.e. all `font-lock-*-face`s. If that cascade lands *after* the initial display pass on already-visible buffers (most reliably `*scratch*`), they render with no font-lock applied until the first redisplay catches up. Symptom: ~1-in-5 starts show un-fontified `*scratch*` (and occasionally other startup-visible buffers) until you press any key. Workaround: `cm/refontify-user-buffers` runs `font-lock-flush` + `font-lock-ensure` on every user buffer with `font-lock-mode` on, hooked into `after-init-hook`. Internal buffers (leading-space names) are skipped to avoid touching daemon/server bookkeeping. If the symptom returns despite the workaround, suspect an additional face-attribute setter that runs *after* `after-init-hook` (e.g. a hook on `window-setup-hook`) and move the re-fontify there instead.
+
+## Olivetti (centered prose column)
+
+`olivetti-mode` is the distraction-free reading column for text-ish buffers
+(text / org / markdown). It is **deliberately not hooked into any mode** —
+toggle per buffer with `C-c T o`. Its `use-package` block (`init.el`, right
+after the `text-mode-hook` prose wiring) tunes three things, each with a
+non-obvious gotcha (2026-09-12):
+
+- **Width is a fraction, not columns.** `olivetti-body-width` is `(/ 2.0 3)`:
+  olivetti reads a float as a fraction of the *window* width and recomputes on
+  `window-size-change-functions`, so the column tracks resizes and splits (per
+  window, not per frame). An integer is a fixed column count; `nil` means
+  `fill-column` + 2.
+- **The "boundary bands" were the theme's `olivetti-fringe`.** Olivetti
+  unconditionally remaps the `fringe` face to `olivetti-fringe` inside its
+  buffers, and `modus-vivendi-tinted` sets that face's `:background`
+  explicitly (`bg-dim`, `#1d2235`) — two visible strips hugging the text. The
+  fix is a bare `(face-spec-set 'olivetti-fringe '((t (:inherit default
+  :background unspecified))))` in `:config`. Two subtleties, both learned the
+  hard way: **(1) `:custom-face` is the wrong tool.** use-package's
+  `:custom-face` stores the spec as `face-defface-spec` (the *base* spec; see
+  `use-package-core.el`), which a theme that sets `olivetti-fringe`
+  `:background` explicitly overrides — the band stays. A bare `face-spec-set`
+  with no spec-type stores a **`face-override-spec`**, which `face-spec-recalc`
+  applies *last*, after every theme spec (`faces.el`), so it wins and survives
+  a runtime `load-theme` (both verified on a live frame). **(2) `:background
+  unspecified` is load-bearing** — an explicitly-set attribute beats an
+  inherited one, so `:inherit default` alone still loses; nulling the
+  background is what lets inheritance fill in the buffer bg. Fringe *width* is
+  untouched, so diff-hl / flymake bitmaps still draw.
+- **Left fringe parked at the frame edge.** Emacs's default window layout is
+  `[margin][fringe][text][fringe][margin]` — fringes *inside* the margins, so
+  they hug the column. `set-window-fringes`'s OUTSIDE-MARGINS flag flips that
+  to `[fringe][margin][text][margin][fringe]`, putting git (diff-hl) and
+  flymake (harper-ls) marks at the far-left edge, out of the reading column.
+  The catch: `olivetti-reset-window` re-issues `set-window-fringes` *without*
+  the flag on every recalc (every resize), so a one-shot flip is undone.
+  `cm/olivetti--fringes-outside-margins` is `:after` advice on
+  `olivetti-set-window` that re-flips it for windows whose buffer has the mode
+  on; on mode exit the mode variable is already nil, so it no-ops and the
+  default layout returns. It is guarded on `windowp` because
+  `olivetti-set-window` recurses per window when handed a frame.
+
+Verify on a live frame (batch Emacs can't — non-GUI frames have no fringes and
+no colors): with the mode on, `(window-fringes)` → `(5 5 t nil)` (the `t` is
+outside-margins); `(face-attribute 'olivetti-fringe :background nil t)` equals
+`(face-background 'default)`; both still hold after `(load-theme
+'modus-vivendi-tinted t)`.
 
 ## Multiple-cursors fake cursors
 

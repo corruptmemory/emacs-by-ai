@@ -369,7 +369,48 @@ Workaround for the fontaine/face-cascade race that occasionally leaves
 
 ;; Olivetti — centered text with configurable body width.  Deliberately not
 ;; hooked into any mode; flip on per-buffer with `C-c T o' when wanted.
-(use-package olivetti)
+;;
+;; Tuned for a chrome-free reading column (2026-09-12):
+;; - `olivetti-body-width' as a FLOAT is a fraction of the window, and
+;;   olivetti recomputes it on every resize (`window-size-change-functions'),
+;;   so the column tracks the frame instead of sitting at `fill-column' + 2.
+;; - Olivetti remaps the `fringe' face to `olivetti-fringe' in its buffers
+;;   (unconditionally).  A theme may set that face's :background explicitly
+;;   (modus-vivendi-tinted → bg-dim), which painted two bands hugging the
+;;   text.  We null it below with an OVERRIDE face spec (`face-spec-set' with
+;;   no spec-type), which `face-spec-recalc' applies AFTER every theme spec,
+;;   so it beats the theme and survives a runtime `load-theme'.  Two traps:
+;;   `:custom-face' is the WRONG tool here — it stores a `face-defface-spec'
+;;   (the base spec; see use-package-core.el), which the theme's explicit
+;;   value overrides, leaving the band visible; and `:background unspecified'
+;;   is load-bearing — an explicit attribute beats an inherited one, so
+;;   `:inherit default' alone would still lose, but nulling the background
+;;   lets inheritance fill in the buffer bg.  Fringe WIDTH is untouched, so
+;;   diff-hl / flymake bitmaps still draw.
+;; - Fringes normally sit between the margins and the text.  Olivetti's
+;;   reset re-issues `set-window-fringes' with OUTSIDE-MARGINS nil on every
+;;   recalc, so a one-shot flip is undone by the next resize; the `:after'
+;;   advice re-flips it whenever olivetti lays out a window whose buffer has
+;;   the mode on, parking the left fringe (git / flymake marks) at the frame
+;;   edge.  On mode exit `olivetti-mode' is already nil, so the advice
+;;   no-ops and the default layout returns.
+(use-package olivetti
+  :custom
+  (olivetti-body-width (/ 2.0 3))   ; the central 2/3 of the window
+  :config
+  ;; Override spec (NOT `:custom-face' — see the trap noted above): make the
+  ;; olivetti-only fringe face vanish into the buffer background.
+  (face-spec-set 'olivetti-fringe
+                 '((t (:inherit default :background unspecified))))
+  (defun cm/olivetti--fringes-outside-margins (window-or-frame)
+    "Keep WINDOW-OR-FRAME's fringes outside its margins while olivetti is on.
+`:after' advice for `olivetti-set-window', which recurses per window when
+handed a frame, so only act on windows whose buffer has `olivetti-mode'."
+    (when (and (windowp window-or-frame)
+               (buffer-local-value 'olivetti-mode (window-buffer window-or-frame)))
+      (let ((fringes (window-fringes window-or-frame)))
+        (set-window-fringes window-or-frame (car fringes) (cadr fringes) t))))
+  (advice-add 'olivetti-set-window :after #'cm/olivetti--fringes-outside-margins))
 
 ;;;; Smooth scrolling (built-in pixel precision + horizontal wheel support).
 (defun cm/apply-scrolling-profile ()

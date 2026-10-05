@@ -4,6 +4,9 @@ local-settings.el
 # straight.el package manager (cloned repos, build cache)
 straight/
 
+# package.el (archive cache, keyring, stray installs; straight.el is the real manager)
+elpa/
+
 # Native compilation cache
 eln-cache/
 
@@ -30,6 +33,9 @@ project-stash.el
 # Misc artifacts
 .PKGINFO
 %backup%~
+
+# Ad-hoc debugging screenshots at the repo root
+/*.png
 
 # Byte-compiled elisp
 *.elc

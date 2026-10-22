@@ -135,8 +135,10 @@ no network and never opens a browser. Added 2026-10-22.
   The databases are AUR packages that append themselves to
   `/etc/dict/dictd.conf` on install: `gcide`, `wn` (WordNet), `foldoc`,
   `jargon`, `devils`, `fra-eng`, `eng-fra`, `moby-thesaurus`, `wikt-en-all`.
-  Install steps and audit notes live in i3-screen-manager's
-  `docs/agent-guide/system.md`. Check it with `dict -h 127.0.0.1 -D`.
+  A new machine (the laptop) follows the step-by-step recipe, audit gate
+  included, in i3-screen-manager's `docs/agent-guide/system.md` ("Local
+  Dictionary Server"); the Emacs side then needs only a pull and a restart.
+  Check the server with `dict -h 127.0.0.1 -D`.
 - **Keys.** `M-#` (`cm/dictionary-dwim`) looks up the active region, else the
   word at point, else prompts; `C-u M-#` always prompts. In `*Dictionary*`:
   `m` matches near-miss spellings, `D` restricts lookups to one database,

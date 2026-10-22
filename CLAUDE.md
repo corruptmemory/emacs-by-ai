@@ -158,6 +158,12 @@ no network and never opens a browser. Added 2026-10-22.
   `dictionary-mode` entry would not match the first display.
   `dictionary-use-single-buffer` is `t`, so the name stays `*Dictionary*`
   instead of `*Dictionary*<N>` per lookup.
+- **The popup opens at half the frame.** Popper's default height fits a popup
+  to its content (1/6 to 1/3 of the frame), and the same early display meant
+  `*Dictionary*` was always fitted while empty, pinning it at 1/6.
+  `cm/popper-window-height` (Popper's `:custom popper-window-height`) gives
+  `*Dictionary*` `cm/dictionary-popup-fraction` (0.5) of the frame and leaves
+  every other popup on Popper's fit.
 
 ## Multiple-cursors fake cursors
 

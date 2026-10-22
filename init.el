@@ -1058,6 +1058,19 @@ With prefix ARG, or when there is nothing at point, prompt for the word."
       (popper-group-by-project)
     (error (popper-group-by-directory))))
 
+(defvar cm/dictionary-popup-fraction 0.5
+  "Fraction of the frame height the *Dictionary* popup opens at.")
+
+(defun cm/popper-window-height (win)
+  "Size popup WIN: *Dictionary* gets `cm/dictionary-popup-fraction' of the
+frame, everything else keeps Popper's fit-to-content default.
+*Dictionary* is displayed before its definitions arrive, so fitting it to
+content would always pin it at Popper's 1/6-of-the-frame minimum."
+  (if (equal (buffer-name (window-buffer win)) "*Dictionary*")
+      (let ((lines (floor (* (frame-height) cm/dictionary-popup-fraction))))
+        (fit-window-to-buffer win lines lines))
+    (popper--fit-window-height win)))
+
 (use-package popper
   :bind
   (("C-`"   . popper-toggle)
@@ -1065,6 +1078,7 @@ With prefix ARG, or when there is nothing at point, prompt for the word."
    ("C-M-`" . popper-toggle-type))
   :custom
   (popper-group-function #'cm/popper-group-by-project-or-directory)
+  (popper-window-height #'cm/popper-window-height)
   (popper-reference-buffers
    '("\\*Messages\\*"
      "\\*Warnings\\*"

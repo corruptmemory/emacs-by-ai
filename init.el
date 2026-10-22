@@ -1010,6 +1010,34 @@ non-bar (block / end-of-line) style untouched."
    (org-mode . flyspell-mode)
    (markdown-mode . flyspell-mode)))
 
+;;;; Dictionary — offline word lookup against the local dictd.
+;;; dictd runs as an OpenRC service bound to 127.0.0.1 (dotfiles
+;;; etc/init.d/dictd); see CLAUDE.md "Dictionary lookup".  M-# looks up the
+;;; region or the word at point, C-u M-# prompts.  In *Dictionary*, `m'
+;;; matches near-miss spellings and `D' restricts lookups to one database.
+(defun cm/dictionary-dwim (arg)
+  "Look up the active region or the word at point in the dictionary.
+With prefix ARG, or when there is nothing at point, prompt for the word."
+  (interactive "P")
+  (require 'dictionary)  ; `dictionary-search-default' is not autoloaded
+  (let ((word (and (not arg) (dictionary-search-default))))
+    (if word
+        (dictionary-search word)
+      ;; `dictionary-search' reads a prefix arg as "also prompt for a
+      ;; single database", so don't let ours leak through.
+      (let ((current-prefix-arg nil))
+        (call-interactively #'dictionary-search)))))
+
+(use-package dictionary
+  :straight nil
+  :bind ("M-#" . cm/dictionary-dwim)
+  :custom
+  ;; Matches the init script's --listen-to.  A fixed server also means no
+  ;; fallback prompt for dict.org when the local one is down.
+  (dictionary-server "127.0.0.1")
+  ;; Reuse one *Dictionary* buffer instead of *Dictionary*<N> per lookup.
+  (dictionary-use-single-buffer t))
+
 ;;;; Magit — Git interface.
 (use-package magit
   :bind
@@ -1046,6 +1074,8 @@ non-bar (block / end-of-line) style untouched."
      "\\*SQL: \\(?:<[^>]+>\\|[^*]+\\)\\*"
      "Output\\*$"
      "\\*Async Shell Command\\*"
+     ;; By name: the buffer is displayed before `dictionary-mode' is set.
+     "\\*Dictionary\\*"
      help-mode
      helpful-mode
      compilation-mode))

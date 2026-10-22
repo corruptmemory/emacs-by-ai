@@ -34,7 +34,7 @@ The file is organized in this order:
 7. **Minibuffer completion** — Vertico (+ directory, repeat, multiform extensions), Orderless, Marginalia, savehist, prescient
 8. **Consult** — region-seeded and thing-at-point search wrappers (`cm/` prefix), embark integration
 9. **In-buffer completion** — built-in `completion-preview-mode` (ghost text only on a unique match; TAB accepts it, M-i takes a word) + the Emacs 31 `*Completions*` buffer (TAB opens it when several candidates match; M-i/M-n/M-p inside; help header hidden), on trial since 2026-09-10; tempel, cape. Corfu (+ history, popupinfo) and kind-icon are commented out in place for a one-step revert
-10. **Editing packages** — multiple-cursors (with symbol-aware mark/skip bindings), expand-region, string-inflection, smartparens, flyspell (text-like modes only: text, org, markdown)
+10. **Editing packages** — multiple-cursors (with symbol-aware mark/skip bindings), expand-region, string-inflection, smartparens, flyspell (text-like modes only: text, org, markdown), dictionary (offline lookup against a local dictd, `M-#` — see "Dictionary lookup")
 11. **Git** — Magit, diff-hl (with flydiff for unsaved-change indicators)
 12. **Popup/buffer management** — Popper with project-based grouping, helpful; `ghostel` (libghostty-vt-backed terminal, replaces vterm) declared separately
 13. **Dev tooling** — built-in tree-sitter automation (`treesit-enabled-modes`; treesit-auto retired on Emacs 31), yasnippet, eglot (20+ language hooks, autoreconnect, harper-ls for writing modes), eglot-booster, consult-eglot, eldoc-box, flymake, dape (DAP)
@@ -123,6 +123,41 @@ no colors): with the mode on, `(window-fringes)` → `(5 5 t nil)` (the `t` is
 outside-margins); `(face-attribute 'olivetti-fringe :background nil t)` equals
 `(face-background 'default)`; both still hold after `(load-theme
 'modus-vivendi-tinted t)`.
+
+## Dictionary lookup
+
+Offline word lookup: the built-in `dictionary` package (`init.el`, right after
+the flyspell block) talks to a **local dictd**, not dict.org, so it works with
+no network and never opens a browser. Added 2026-10-22.
+
+- **Server.** `dictd` runs as an OpenRC system service, `dotfiles/etc/init.d/dictd`
+  (copied into `/etc`, not symlinked), bound to `127.0.0.1:2628` as `nobody`.
+  The databases are AUR packages that append themselves to
+  `/etc/dict/dictd.conf` on install: `gcide`, `wn` (WordNet), `foldoc`,
+  `jargon`, `devils`, `fra-eng`, `eng-fra`, `moby-thesaurus`, `wikt-en-all`.
+  Install steps and audit notes live in i3-screen-manager's
+  `docs/agent-guide/system.md`. Check it with `dict -h 127.0.0.1 -D`.
+- **Keys.** `M-#` (`cm/dictionary-dwim`) looks up the active region, else the
+  word at point, else prompts; `C-u M-#` always prompts. In `*Dictionary*`:
+  `m` matches near-miss spellings, `D` restricts lookups to one database,
+  `s` searches again, `l` goes back, `q` closes.
+- **`dictionary-server` is `"127.0.0.1"`, not `"localhost"` or `nil`.** It
+  matches the init script's `--listen-to`; `nil` would fall back to dict.org
+  after a prompt, and `"localhost"` may resolve to `::1`, where nothing listens.
+- **The `:custom` values apply only when `dictionary.el` loads.** `:bind`
+  defers the library until the first `M-#`, so before then `dictionary-server`
+  is void; use-package holds the value and the defcustom picks it up on load.
+  Inspect it after a lookup, not at startup.
+- **`cm/dictionary-dwim` requires the library itself.** `dictionary-search-default`
+  (region, then link under point, then word at point) is not autoloaded. The
+  wrapper also binds `current-prefix-arg` to nil before calling
+  `dictionary-search` interactively, because that command reads a prefix arg as
+  "also prompt for one database".
+- **The Popper rule matches by name (`"\\*Dictionary\\*"`), not by mode.**
+  `dictionary` displays the buffer before it turns on `dictionary-mode`, so a
+  `dictionary-mode` entry would not match the first display.
+  `dictionary-use-single-buffer` is `t`, so the name stays `*Dictionary*`
+  instead of `*Dictionary*<N>` per lookup.
 
 ## Multiple-cursors fake cursors
 

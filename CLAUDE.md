@@ -210,7 +210,7 @@ native cursor gets).
 
 ## Custom LSP Servers
 
-Non-default eglot server entries are configured for: Odin (`ols`), Zig (`zls`), go-templ (`templ lsp`), GLSL (`glslls`), Fish (`fish-lsp`), Haskell (`haskell-language-server-wrapper`), Ruby/Rails (`ruby-lsp` — Shopify's server; see "Ruby / Rails" below), Harper (`harper-ls` — grammar/spell checking for org/markdown/text modes).
+Non-default eglot server entries are configured for: Odin (`ols`), Zig (`zls`), go-templ (`templ lsp`), GLSL (`glslls`), Fish (`fish-lsp`), Haskell (`haskell-language-server-wrapper`), Ruby/Rails (`ruby-lsp` — Shopify's server; see "Ruby / Rails" below), Python (`basedpyright-langserver`; see "Python" below), Harper (`harper-ls` — grammar/spell checking for org/markdown/text modes).
 
 Jai (`jails`) is **intentionally left unwired**, even though the `jails` binary is now installed (`~/.local/bin/jails`) and a `jails.json` exists in `~/projects/game-bootstrap`. jails is flakey and slow and tends to drop code navigation entirely when it breaks; the preferred setup is graceful degradation over an unreliable LSP — `jai-ts-mode` regex font-lock + `dumb-jump` + the `C-c w` multi-root grep commands (see "Multi-root project search" below), which lands in the "good enough" zone. Do **not** uncomment the `eglot-server-programs` entry or add `jai-ts-mode` to the eglot hook list.
 
@@ -390,6 +390,58 @@ this config is `project.el` — ruby-lsp-rails navigation + `consult`/
 by LSP, can conflict); Sorbet/Steep/TypeProf (type-checkers, niche);
 `enh-ruby-mode` (superseded by `ruby-ts-mode`). `bundler.el`/`rake.el` are
 reasonable nice-to-haves left out of the initial setup.
+
+## Python
+
+Added 2026-11-11. The major mode is the built-in **`python-ts-mode`**. The LSP
+is **basedpyright**, a community fork of Microsoft's pyright that merges each
+pyright release and re-implements features Microsoft keeps in its closed
+Pylance: inlay hints, semantic highlighting, hover docs for compiled modules,
+"add import" quick fixes, and go to implementation. Install and upgrade it with
+`uv tool install basedpyright` / `uv tool upgrade basedpyright` (rung 3 of the
+package-install guide). It brings its own Node through the `nodejs-wheel`
+package, so no npm is involved. The binary is `~/.local/bin/basedpyright-langserver`.
+Arch's `pyright` (rung 1) is the fallback, with the same engine and none of
+those extras.
+
+- **The eglot entry is explicit, for the same reason as Ruby's.** Eglot 1.24's
+  built-in python contact is an `eglot-alternatives` list (`rass`, `pylsp`,
+  basedpyright, pyright, `pyrefly`, `ty`, …) that prompts when more than one is
+  on `PATH`. The prepended `((python-ts-mode python-mode) . ("basedpyright-langserver"
+  "--stdio"))` entry makes the choice deterministic.
+- **Each project tells it which venv to use.** On its own, basedpyright finds a
+  venv only at `./.venv`; otherwise it uses `python` on `PATH`, which here is
+  system Python with none of a project's dependencies. For a venv anywhere
+  else, set `eglot-workspace-configuration` to
+  `(:python (:pythonPath "/abs/path/venv/bin/python"))`. basedpyright runs that
+  interpreter to learn both the Python version and the site-packages, so no
+  `pythonVersion` is needed. Use an absolute path, because the server receives
+  it verbatim.
+- **Settings namespace.** Of the `python.*` settings, basedpyright reads only
+  `pythonPath` and `venvPath`; everything else goes under
+  `:basedpyright (:analysis (…))`. Set `:typeCheckingMode "standard"` there.
+  basedpyright's own default, `"recommended"`, turns on every rule and buries
+  someone else's untyped code in diagnostics.
+- **One parent `.dir-locals.el` can map several repos** using subdirectory
+  keys: `(("repo-a/" . ((nil . ((eglot-workspace-configuration . …))))) …)`.
+  Eglot reads the configuration in a temporary non-file buffer whose
+  `default-directory` is the project root, and the subdirectory entries match
+  there too (verified in batch, 2026-11-11). A subdirectory entry replaces the
+  value as a whole rather than merging, so each entry repeats the analysis
+  settings. Putting `python-shell-virtualenv-root` in the same entry makes
+  `run-python` use that venv as well. The driving case is `~/owletcare`: its
+  Owlet clones must stay unmodified, and `~/owletcare` itself is not a repo, so
+  `~/owletcare/.dir-locals.el` maps each clone to `~/owletcare/.venvs/<repo>`
+  without writing into any of them.
+- **Eglot turns on inlay hints and semantic highlighting by default** whenever
+  the server offers them, and basedpyright offers both. If the semantic coloring
+  clashes with the theme, `M-x eglot-semantic-tokens-mode` toggles it per buffer;
+  adding `:semanticTokensProvider` to `eglot-ignored-server-capabilities` turns
+  it off everywhere.
+- **To inspect a live setup,** run `M-x eglot-show-workspace-configuration` in
+  a project buffer. To check a venv without Emacs, run
+  `basedpyright --pythonpath <venv>/bin/python -p <repo>` and look for
+  `reportMissingImports`. The checker writes nothing into the repo.
 
 ## Tree-Sitter and Arch Linux
 

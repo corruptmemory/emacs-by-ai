@@ -1340,6 +1340,14 @@ content would always pin it at Popper's 1/6-of-the-frame minimum."
   ;; ruby-lsp-rails addon when that gem is in the app's Gemfile.  See CLAUDE.md.
   (add-to-list 'eglot-server-programs
                '((ruby-ts-mode ruby-mode) . ("ruby-lsp")))
+  ;; Python -- basedpyright (install once: uv tool install basedpyright).
+  ;; Eglot 1.24's built-in python entry is an `eglot-alternatives' list
+  ;; (rass, pylsp, basedpyright, pyright, pyrefly, ty, ...) that prompts when
+  ;; more than one is on PATH; this explicit entry forces basedpyright.  Each
+  ;; project points it at its venv through `eglot-workspace-configuration'
+  ;; (:python (:pythonPath ...)) in a .dir-locals.el.  See CLAUDE.md.
+  (add-to-list 'eglot-server-programs
+               '((python-ts-mode python-mode) . ("basedpyright-langserver" "--stdio")))
   ;; jails (Jai LSP) must be built manually from ~/projects/Jails.
   ;; Uncomment once the binary exists at ~/projects/Jails/bin/jails.
   ;; (add-to-list 'eglot-server-programs
@@ -1915,7 +1923,8 @@ With prefix argument REFRESH, rebuild completion cache first."
 (use-package zig-mode)
 
 ;;;; Python.
-;; python-ts-mode is built-in; pyright/pylsp are eglot defaults.
+;; python-ts-mode is built-in; the LSP is basedpyright, wired in the eglot
+;; block.  Per-project venvs are mapped in .dir-locals.el (see CLAUDE.md).
 
 ;;;; Bash.
 ;; bash-ts-mode is built-in; bash-language-server is eglot's default.
